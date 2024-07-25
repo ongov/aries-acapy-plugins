@@ -134,11 +134,12 @@ def mdoc_sign(
         }
         documents.append(document)
 
-    signed = {
-        "version": "1.0",
-        "documents": documents,
-        "status": 0,
-    }
+    # signed = {
+    #     "version": "1.0",
+    #     "documents": documents,
+    #     "status": 0,
+    # }
+    signed = documents
     signed_hex = hexlify(cbor2.dumps(signed))
 
     return f"{signed_hex}"
