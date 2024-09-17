@@ -24,7 +24,7 @@ jobs:
       - name: Debug Environment
         run: |
           gh auth status
-          gh repo view myorg/aries-acapy-plugins --json name,owner
+          gh repo view ongov/aries-acapy-plugins --json name,owner
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
