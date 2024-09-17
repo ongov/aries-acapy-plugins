@@ -19,7 +19,7 @@ jobs:
 
       - name: Sync repository with the upstream
         run: |
-          gh auth refresh -s workflow
+          gh auth refresh -s workflow -h github.com
           DEBUG=1 gh repo sync $REPOSITORY -b $BRANCH_NAME
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
