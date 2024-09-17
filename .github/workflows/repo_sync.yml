@@ -19,22 +19,23 @@ jobs:
 
       - name: Authenticate GitHub CLI
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
+          echo ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }} | gh auth login --with-token
 
       - name: Debug Environment
         run: |
           gh auth status
           gh repo view ongov/aries-acapy-plugins --json name,owner
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }}
 
       - name: Sync repository with the upstream
         run: |
           DEBUG=1 gh repo sync $REPOSITORY -b $BRANCH_NAME --force
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }}
+          GH_TOKEN: ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }}
           REPOSITORY: ${{ github.repository }}
-          BRANCH_NAME: ${{ github.ref_name }}
+          BRANCH_NAME: "main"
 
       - name: Send notification on sync failure
         if: failure()
