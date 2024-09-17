@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up GitHub CLI
-        uses: cli/gh-actions@v2
+        uses: actions/setup-gh@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
