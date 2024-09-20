@@ -35,6 +35,12 @@ class CredProcessor(Protocol):
             encoded: signed credential payload.
         """
 
+    def validate_credential_subject(self, supported: SupportedCredential, subject: dict):
+        """Validate the credential subject."""
+
+    def validate_supported_credential(self, supported: SupportedCredential):
+        """Validate the credential."""
+
 
 class CredIssueError(BaseError):
     """Base class for CredProcessor errors."""

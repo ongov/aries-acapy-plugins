@@ -341,8 +341,6 @@ async def issue_cred(request: web.Request):
         # But we'll leave it to the controller
         # await ex_record.delete_record(session)
 
-    LOGGER.debug("Credential: %s", credential)
-
     return web.json_response(
         {
             "format": supported.format,

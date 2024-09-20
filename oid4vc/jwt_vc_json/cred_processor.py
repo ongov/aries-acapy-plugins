@@ -75,3 +75,11 @@ class JwtVcJsonCredProcessor(CredProcessor):
         )
 
         return jws
+
+    def validate_credential_subject(self, supported: SupportedCredential, subject: dict):
+        """Validate the credential subject."""
+        pass
+
+    def validate_supported_credential(self, supported: SupportedCredential):
+        """Validate a supported JWT VC JSON Credential."""
+        pass

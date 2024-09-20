@@ -107,7 +107,9 @@ async def list_exchange_records(request: web.BaseRequest):
     try:
         async with context.profile.session() as session:
             if exchange_id := request.query.get("exchange_id"):
-                record = await OID4VCIExchangeRecord.retrieve_by_id(session, exchange_id)
+                record = await OID4VCIExchangeRecord.retrieve_by_id(
+                    session, exchange_id
+                )
                 results = [record.serialize()]
             else:
                 filter_ = {
@@ -187,8 +189,11 @@ async def exchange_create(request: web.Request):
     body: Dict[str, Any] = await request.json()
     LOGGER.debug(f"Creating OID4VCI exchange with: {body}")
 
-    did = body.pop("did", None)
-    verification_method = body.pop("verification_method", None)
+    did = body.get("did", None)
+    verification_method = body.get("verification_method", None)
+    supported_cred_id = body["supported_cred_id"]
+    credential_subject = body["credential_subject"]
+    pin = body.get("pin")
 
     if verification_method is None:
         if did is None:
@@ -208,8 +213,32 @@ async def exchange_create(request: web.Request):
     else:
         issuer_id = verification_method.split("#")[0]
 
+    async with context.session() as session:
+        try:
+            supported = await SupportedCredential.retrieve_by_id(
+                session, supported_cred_id
+            )
+        except StorageNotFoundError:
+            raise web.HTTPNotFound(
+                reason=f"Supported cred identified by {supported_cred_id} not found"
+            )
+
+    registered_processors = context.inject(CredProcessors)
+    if supported.format not in registered_processors.processors:
+        raise web.HTTPBadRequest(
+            reason=f"Format {supported.format} is not supported by"
+            " currently registered processors"
+        )
+    processor = registered_processors.for_format(supported.format)
+    try:
+        processor.validate_credential_subject(supported, credential_subject)
+    except ValueError as err:
+        raise web.HTTPBadRequest(reason=str(err)) from err
+
     record = OID4VCIExchangeRecord(
-        **body,
+        supported_cred_id=supported_cred_id,
+        credential_subject=credential_subject,
+        pin=pin,
         state=OID4VCIExchangeRecord.STATE_CREATED,
         verification_method=verification_method,
         issuer_id=issuer_id,
@@ -413,6 +442,7 @@ class SupportedCredCreateRequestSchema(OpenAPISchema):
 async def supported_credential_create(request: web.Request):
     """Request handler for creating a credential supported record."""
     context = request["context"]
+    assert isinstance(context, AdminRequestContext)
     profile = context.profile
 
     body: Dict[str, Any] = await request.json()
@@ -426,8 +456,15 @@ async def supported_credential_create(request: web.Request):
     registered_processors = context.inject(CredProcessors)
     if record.format not in registered_processors.processors:
         raise web.HTTPBadRequest(
-            reason=f"Format {format} is not supported by currently registered processors"
+            reason=f"Format {record.format} is not supported by"
+            " currently registered processors"
         )
+
+    processor = registered_processors.for_format(record.format)
+    try:
+        processor.validate_supported_credential(record)
+    except ValueError as err:
+        raise web.HTTPBadRequest(reason=str(err)) from err
 
     async with profile.session() as session:
         await record.save(session, reason="Save credential supported record.")
@@ -524,7 +561,9 @@ async def supported_credential_remove(request: web.Request):
 
     try:
         async with context.session() as session:
-            record = await SupportedCredential.retrieve_by_id(session, supported_cred_id)
+            record = await SupportedCredential.retrieve_by_id(
+                session, supported_cred_id
+            )
             await record.delete_record(session)
     except StorageNotFoundError as err:
         raise web.HTTPNotFound(reason=err.roll_up) from err
@@ -694,7 +733,9 @@ async def list_oid4vp_presentations(request: web.Request):
     try:
         async with context.profile.session() as session:
             if presentation_id := request.query.get("presentation_id"):
-                record = await OID4VPPresentation.retrieve_by_id(session, presentation_id)
+                record = await OID4VPPresentation.retrieve_by_id(
+                    session, presentation_id
+                )
                 results = [record.serialize()]
             else:
                 filter_ = {
@@ -872,7 +913,9 @@ async def create_did_jwk(request: web.Request):
         jwk = json.loads(key.get_jwk_public())
         jwk["use"] = "sig"
 
-        did = "did:jwk:" + bytes_to_b64(json.dumps(jwk).encode(), urlsafe=True, pad=False)
+        did = "did:jwk:" + bytes_to_b64(
+            json.dumps(jwk).encode(), urlsafe=True, pad=False
+        )
 
         did_info = DIDInfo(
             did=did,
@@ -899,7 +942,9 @@ async def register(app: web.Application):
             ),
             web.post("/oid4vci/exchange/create", exchange_create),
             web.delete("/oid4vci/exchange/records/{exchange_id}", exchange_delete),
-            web.post("/oid4vci/credential-supported/create", supported_credential_create),
+            web.post(
+                "/oid4vci/credential-supported/create", supported_credential_create
+            ),
             web.get(
                 "/oid4vci/credential-supported/records",
                 supported_credential_list,
