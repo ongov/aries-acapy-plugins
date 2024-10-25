@@ -19,6 +19,7 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-latest
+    if: github.repository == 'openwallet-foundation/acapy-plugins'
     outputs:
       current_available_version: ${{ steps.current_available_version.outputs.version }}
       current_global_version: ${{ steps.current_global_version.outputs.version }}
@@ -57,7 +58,7 @@ jobs:
         id: current_available_version
         run: |
           remote_version=$(pip index versions acapy-agent)
-          version=$(grep -oP '(?<=Available versions: ).*?(?=,)' <<< "$remote_version")
+          version=$(grep -oP '(?<=Available versions: ).*?(?=$|,)' <<< "$remote_version")
           echo current_available_version=$version >> $GITHUB_OUTPUT
           echo "Remote version = $version"
       #----------------------------------------------
