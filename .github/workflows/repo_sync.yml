@@ -30,7 +30,7 @@ jobs:
 
       - name: Sync repository with the upstream
         run: |
-          DEBUG=1 gh repo sync $REPOSITORY -b $BRANCH_NAME --force
+          DEBUG=1 gh repo sync $REPOSITORY -b $BRANCH_NAME --source openwallet-foundation/acapy-plugins --force
         env:
           GITHUB_TOKEN: ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }}
           GH_TOKEN: ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }}
