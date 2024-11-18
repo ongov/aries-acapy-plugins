@@ -9,6 +9,10 @@ from acapy_agent.admin.request_context import AdminRequestContext
 from acapy_agent.admin.server import debug_middleware, ready_middleware
 from acapy_agent.config.injection_context import InjectionContext
 from acapy_agent.core.profile import Profile
+from acapy_agent.wallet.models.wallet_record import WalletRecord
+from acapy_agent.storage.error import StorageError
+from acapy_agent.messaging.models.base import BaseModelError
+from acapy_agent.multitenant.base import BaseMultitenantManager
 from aiohttp import web
 from aiohttp_apispec import setup_aiohttp_apispec, validation_middleware
 
@@ -49,8 +53,10 @@ class Oid4vciServer(BaseAdminServer):
         self.host = host
         self.port = port
         self.context = context
+        self.root_profile = root_profile
         self.profile = root_profile
         self.site = None
+        self.multitenant_manager = context.inject_or(BaseMultitenantManager)
 
     async def make_application(self) -> web.Application:
         """Get the aiohttp application instance."""
@@ -67,12 +73,45 @@ class Oid4vciServer(BaseAdminServer):
             the path and report that path in credential offers and issuer
             metadata from a tenant.
             """
-            admin_context = AdminRequestContext(
-                profile=self.profile,
-                # root_profile=self.profile, # TODO: support Multitenancy context setup
-                # metadata={}, # TODO: support Multitenancy context setup
-            )
-            request["context"] = admin_context
+            """Getting Wallet ID and Wallet Key from request"""
+            
+            if 'wallet_id' in request.match_info:
+                wallet_id = request.match_info["wallet_id"]
+                try:
+                    async with self.profile.session() as session:
+                        wallet_record = await WalletRecord.retrieve_by_id(
+                            session, wallet_id
+                        )
+                except (StorageError, BaseModelError) as err:
+                    raise web.HTTPBadRequest(reason=err.roll_up) from err
+                logging.info(f"Wallet ID: {wallet_id}")
+                wallet_info = wallet_record.serialize()
+                wallet_key = wallet_info["settings"]["wallet.key"]
+                logging.info(f"Wallet Key: {wallet_key}")
+                
+                
+                """Getting Wallet and Profile from wallet_id and wallet_key"""
+                wallet,wallet_profile = await self.multitenant_manager.get_wallet_and_profile(self.context, wallet_id, wallet_key)
+                logging.info(f"Wallet: {wallet}")
+                logging.info(f"Wallet Profile: {wallet_profile}")
+                
+                
+                admin_context = AdminRequestContext(
+                    profile=wallet_profile,
+                    root_profile=self.root_profile, 
+                    
+                    metadata={
+                        "wallet_id": wallet_id,
+                        "wallet_key": wallet_key,
+                    }, 
+                )
+                request["context"] = admin_context
+            else:
+                request["context"] = AdminRequestContext(
+                    profile=self.profile, 
+                    # root_profile=self.profile, # TODO: support Multitenancy context setup
+                    # metadata={}, # TODO: support Multitenancy context setup
+                )
             return await handler(request)
 
         middlewares.append(setup_context)
