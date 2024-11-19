@@ -74,8 +74,7 @@ class Oid4vciServer(BaseAdminServer):
             metadata from a tenant.
             """
             """Getting Wallet ID and Wallet Key from request"""
-            
-            if 'wallet_id' in request.match_info:
+            if self.multitenant_manager:
                 wallet_id = request.match_info["wallet_id"]
                 try:
                     async with self.profile.session() as session:
@@ -133,7 +132,7 @@ class Oid4vciServer(BaseAdminServer):
             ]
         )
 
-        await public_routes_register(app)
+        await public_routes_register(app, self.multitenant_manager)
 
         cors = aiohttp_cors.setup(
             app,
