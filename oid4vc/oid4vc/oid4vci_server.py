@@ -53,7 +53,6 @@ class Oid4vciServer(BaseAdminServer):
         self.host = host
         self.port = port
         self.context = context
-        self.root_profile = root_profile
         self.profile = root_profile
         self.site = None
         self.multitenant_manager = context.inject_or(BaseMultitenantManager)
@@ -70,8 +69,7 @@ class Oid4vciServer(BaseAdminServer):
             Getting Wallet Profile from request and root_profile.
             """
             multitenant = self.multitenant_manager
-            if multitenant:
-                wallet_id = request.match_info["wallet_id"]
+            if multitenant and (wallet_id := request.match_info["wallet_id"]):
                 try:
                     async with self.profile.session() as session:
                         wallet_record = await WalletRecord.retrieve_by_id(
@@ -86,7 +84,7 @@ class Oid4vciServer(BaseAdminServer):
                 )
                 admin_context = AdminRequestContext(
                     profile=wallet_profile,
-                    root_profile=self.root_profile,
+                    root_profile=self.profile,
                     metadata={
                         "wallet_id": wallet_id,
                         "wallet_key": wallet_key,
