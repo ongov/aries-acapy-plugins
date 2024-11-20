@@ -69,7 +69,7 @@ class Oid4vciServer(BaseAdminServer):
             Getting Wallet Profile from request and root_profile.
             """
             multitenant = self.multitenant_manager
-            wallet_id = request.match_info["wallet_id"]
+            wallet_id = request.match_info.get["wallet_id"]
             if multitenant and wallet_id:
                 try:
                     async with self.profile.session() as session:
