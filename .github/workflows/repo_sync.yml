@@ -19,21 +19,21 @@ jobs:
 
       - name: Authenticate GitHub CLI
         run: |
-          echo ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }} | gh auth login --with-token
+          echo ${{ secrets.ODCP_DEVSECOPS_GITHUBACTIONS_REPO_SYNC_AUTOMATION_PAT }} | gh auth login --with-token
 
       - name: Debug Environment
         run: |
           gh auth status
           gh repo view ongov/aries-acapy-plugins --json name,owner
         env:
-          GITHUB_TOKEN: ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }}
+          GITHUB_TOKEN: ${{ secrets.ODCP_DEVSECOPS_GITHUBACTIONS_REPO_SYNC_AUTOMATION_PAT }}
 
       - name: Sync repository with the upstream
         run: |
           DEBUG=1 gh repo sync $REPOSITORY -b $BRANCH_NAME --source openwallet-foundation/acapy-plugins --force
         env:
-          GITHUB_TOKEN: ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }}
-          GH_TOKEN: ${{ secrets.TEMP_ONGOV_ARIES_ACAPY_PLUGINS_REPO_SYNC_PAT }}
+          GITHUB_TOKEN: ${{ secrets.ODCP_DEVSECOPS_GITHUBACTIONS_REPO_SYNC_AUTOMATION_PAT }}
+          GH_TOKEN: ${{ secrets.ODCP_DEVSECOPS_GITHUBACTIONS_REPO_SYNC_AUTOMATION_PAT }}
           REPOSITORY: ${{ github.repository }}
           BRANCH_NAME: "main"
 
