@@ -90,19 +90,12 @@ async def credential_issuer_metadata(request: web.Request):
     async with context.session() as session:
         # TODO If there's a lot, this will be a problem
         credentials_supported = await SupportedCredential.query(session)
-    if request.match_info.get("wallet_id"):
+
         wallet_id = request.match_info["wallet_id"]
+        subpath = f"/tenant/{wallet_id}" if wallet_id else ""
         metadata = {
-            "credential_issuer": f"{public_url}/wallet/{wallet_id}",
-            "credential_endpoint": f"{public_url}/wallet/{wallet_id}/credential",
-            "credentials_supported": [
-                supported.to_issuer_metadata() for supported in credentials_supported
-            ],
-        }
-    else:
-        metadata = {
-            "credential_issuer": f"{public_url}",
-            "credential_endpoint": f"{public_url}/credential",
+            "credential_issuer": f"{public_url}{subpath}",
+            "credential_endpoint": f"{public_url}{subpath}/credential",
             "credentials_supported": [
                 supported.to_issuer_metadata() for supported in credentials_supported
             ],
@@ -629,35 +622,19 @@ async def post_response(request: web.Request):
 
 async def register(app: web.Application, multitenant: bool):
     """Register routes."""
-    if multitenant:
-        app.add_routes(
-            [
-                web.get(
-                    "/wallet/{wallet_id}/.well-known/openid-credential-issuer",
-                    credential_issuer_metadata,
-                    allow_head=False,
-                ),
-                # TODO Add .well-known/did-configuration.json
-                # Spec: https://identity.foundation/.well-known/resources/did-configuration/
-                web.post("/wallet/{wallet_id}/token", token),
-                web.post("/wallet/{wallet_id}/credential", issue_cred),
-                web.get("/wallet/{wallet_id}/oid4vp/request/{request_id}", get_request),
-                web.post("/wallet/{wallet_id}/oid4vp/response/{presentation_id}", post_response),
-            ]
-        )
-    else:
-        app.add_routes(
-            [
-                web.get(
-                    "/.well-known/openid-credential-issuer",
-                    credential_issuer_metadata,
-                    allow_head=False,
-                ),
-                # TODO Add .well-known/did-configuration.json
-                # Spec: https://identity.foundation/.well-known/resources/did-configuration/
-                web.post("/token", token),
-                web.post("/credential", issue_cred),
-                web.get("/oid4vp/request/{request_id}", get_request),
-                web.post("/oid4vp/response/{presentation_id}", post_response),
-            ]
-        )
+    subpath = "/tenant/{wallet_id}" if multitenant else ""
+    app.add_routes(
+        [
+            web.get(
+                f"{subpath}/.well-known/openid-credential-issuer",
+                credential_issuer_metadata,
+                allow_head=False,
+            ),
+            # TODO Add .well-known/did-configuration.json
+            # Spec: https://identity.foundation/.well-known/resources/did-configuration/
+            web.post(f"{subpath}/token", token),
+            web.post(f"{subpath}/credential", issue_cred),
+            web.get(f"{subpath}/oid4vp/request/{{request_id}}", get_request),
+            web.post(f"{subpath}/oid4vp/response/{{presentation_id}}", post_response),
+        ]
+    )

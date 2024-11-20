@@ -67,14 +67,10 @@ class Oid4vciServer(BaseAdminServer):
         async def setup_context(request: web.Request, handler):
             """Set up request context.
 
-            TODO: support Multitenancy context setup
-            Right now, this will only work for a standard agent instance. To
-            support multitenancy, we will need to include wallet identifiers in
-            the path and report that path in credential offers and issuer
-            metadata from a tenant.
+            Getting Wallet Profile from request and root_profile.
             """
-            """Getting Wallet ID and Wallet Key from request"""
-            if self.multitenant_manager:
+            multitenant = self.multitenant_manager
+            if multitenant:
                 wallet_id = request.match_info["wallet_id"]
                 try:
                     async with self.profile.session() as session:
@@ -83,33 +79,23 @@ class Oid4vciServer(BaseAdminServer):
                         )
                 except (StorageError, BaseModelError) as err:
                     raise web.HTTPBadRequest(reason=err.roll_up) from err
-                logging.info(f"Wallet ID: {wallet_id}")
                 wallet_info = wallet_record.serialize()
                 wallet_key = wallet_info["settings"]["wallet.key"]
-                logging.info(f"Wallet Key: {wallet_key}")
-                
-                
-                """Getting Wallet and Profile from wallet_id and wallet_key"""
-                wallet,wallet_profile = await self.multitenant_manager.get_wallet_and_profile(self.context, wallet_id, wallet_key)
-                logging.info(f"Wallet: {wallet}")
-                logging.info(f"Wallet Profile: {wallet_profile}")
-                
-                
+                _, wallet_profile = await multitenant.get_wallet_and_profile(
+                    self.context, wallet_id, wallet_key
+                )
                 admin_context = AdminRequestContext(
                     profile=wallet_profile,
-                    root_profile=self.root_profile, 
-                    
+                    root_profile=self.root_profile,
                     metadata={
                         "wallet_id": wallet_id,
                         "wallet_key": wallet_key,
-                    }, 
+                    },
                 )
                 request["context"] = admin_context
             else:
                 request["context"] = AdminRequestContext(
-                    profile=self.profile, 
-                    # root_profile=self.profile, # TODO: support Multitenancy context setup
-                    # metadata={}, # TODO: support Multitenancy context setup
+                    profile=self.profile,
                 )
             return await handler(request)
 

@@ -362,29 +362,19 @@ async def get_cred_offer(request: web.BaseRequest):
         raise web.HTTPBadRequest(reason=err.roll_up) from err
 
     user_pin_required: bool = record.pin is not None
-    if context.profile.settings.get("multitenant.enabled"):
-        wallet_id = context.profile.settings.get("wallet.id")
-        offer = {
-            "credential_issuer": f"{config.endpoint}/wallet/{wallet_id}",
-            "credentials": [supported.identifier],
-            "grants": {
-                "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
-                    "pre-authorized_code": code,
-                    "user_pin_required": user_pin_required,
-                }
-            },
-        }
-    else:
-        offer = {
-            "credential_issuer": f"{config.endpoint}",
-            "credentials": [supported.identifier],
-            "grants": {
-                "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
-                    "pre-authorized_code": code,
-                    "user_pin_required": user_pin_required,
-                }
-            },
-        }
+    wallet_id = context.profile.settings.get("wallet.id") if context.profile.settings.get(
+                "multitenant.enabled") else None
+    subpath = f"/tenant/{wallet_id}" if wallet_id else ""
+    offer = {
+        "credential_issuer": f"{config.endpoint}{subpath}",
+        "credentials": [supported.identifier],
+        "grants": {
+            "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
+                "pre-authorized_code": code,
+                "user_pin_required": user_pin_required,
+            }
+        },
+    }
     offer_uri = quote(json.dumps(offer))
     full_uri = f"openid-credential-offer://?credential_offer={offer_uri}"
     offer_response = {
