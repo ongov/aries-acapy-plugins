@@ -39,10 +39,8 @@ jobs:
 
       - name: Send notification on sync failure
         if: failure()
-        uses: ongov/odcp-actions/send-slack-notification@v2
+        uses: ./.github/workflows/actions/send-slack-notification
         with:
-          python_version: 3.12.6
-          message: "Unable to sync the repository with its upstream. See https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} for more information."
-          message_type: "text"
+          slack_notification: "Unable to sync the repository with its upstream. See https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} for more information."
           slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
