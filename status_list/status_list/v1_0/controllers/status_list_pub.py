@@ -124,8 +124,10 @@ async def publish_status_list(request: web.BaseRequest):
                 status_type=status_type,
                 status_list_number=list_number,
             )
+            LOGGER.debug(f"config.base_dir = {config.base_dir}")
             if config.base_dir is not None:
                 file_path = config.base_dir + path
+                LOGGER.debug(f"publishing status list to {file_path}")
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 with open(file_path, "w") as file:
                     file.write(jws)
