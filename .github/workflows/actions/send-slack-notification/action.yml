@@ -1,0 +1,35 @@
+# Makes use of https://github.com/slackapi/slack-github-action | https://github.com/marketplace/actions/slack-send
+name: Send Slack Notification
+description: Send a Slack notification
+author: "donato.coladipietro@ontario.ca"
+
+inputs:
+  slack_notification:
+    description: The notification to send to Slack
+    required: true
+  slack_webhook_url:
+    description: The Slack webhook URL
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Send GitHub trigger payload to Slack Workflow Builder
+      id: send-slack-notification
+      uses: slackapi/slack-github-action@v1.25.0
+      with:
+        payload: |
+          {
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "${{ inputs.slack_notification }}\n"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ inputs.slack_webhook_url }}
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
