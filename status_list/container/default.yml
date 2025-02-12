@@ -1,4 +1,4 @@
-label: connections inviter
+label: status_list
 
 admin: [0.0.0.0, 3001]
 admin-insecure-mode: false
@@ -9,20 +9,14 @@ inbound-transport:
   - [ws, 0.0.0.0, 3002]
 outbound-transport: http
 endpoint:
-  - http://localhost:3000
-
-no-ledger: true
+  - http://host.docker.internal:3000
 
 plugin:
-  - connections
+  - status_list.v1_0
 
-log-level: debug
+genesis-url: http://test.bcovrin.vonx.io/genesis
+
+log-level: info
 
 auto-accept-invites: true
 auto-respond-messages: true
-
-# Wallet
-auto-provision: true
-wallet-type: askar
-wallet-name: connections-wallet
-wallet-key: insecure
