@@ -79,7 +79,6 @@ class JwtVcJsonCredProcessor(Issuer, CredVerifier, PresVerifier):
             context, supported.supported_cred_id, ex_record.exchange_id, "w3c"
         ):
             payload["vc"]["credentialStatus"] = credential_status
-            LOGGER.debug("signed credential: %s", payload)
 
         jws = await jwt_sign(
             context.profile,
@@ -87,7 +86,8 @@ class JwtVcJsonCredProcessor(Issuer, CredVerifier, PresVerifier):
             payload,
             verification_method=ex_record.verification_method,
         )
-
+        LOGGER.debug("signed credential: %s", jws)
+        
         return jws
 
     def validate_credential_subject(
