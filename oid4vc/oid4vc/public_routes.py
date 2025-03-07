@@ -100,7 +100,7 @@ async def credential_issuer_metadata(request: web.Request):
             "credential_endpoint": f"{public_url}{subpath}/credential",
             "display": [
             {
-                "name": "<Issuer Name>",
+                "name": "Ontario Test Business Registry",
             },
         ],
             "credentials_supported": [
