@@ -1,4 +1,4 @@
-label: connections
+label: connections inviter
 
 admin: [0.0.0.0, 3001]
 admin-insecure-mode: false
