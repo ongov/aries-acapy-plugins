@@ -27,6 +27,7 @@ async def test_issuer_metadata(context: AdminRequestContext, req: web.Request):
             {
                 "credential_issuer": f"http://localhost:8020/tenant/{req.match_info.get()}",
                 "credential_endpoint": f"http://localhost:8020/tenant/{req.match_info.get()}/credential",
+                'display': [{'name': 'Ontario Business Registry'}],
                 "credentials_supported": [
                     {
                         "format": "jwt_vc_json",
