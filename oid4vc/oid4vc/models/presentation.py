@@ -41,6 +41,7 @@ class OID4VPPresentation(BaseRecord):
         errors: Optional[List[str]] = None,
         matched_credentials: Optional[Dict[str, Any]] = None,
         verified: Optional[bool] = None,
+        revoked: Optional[bool] = None,
         request_id: str,
         nonce: Optional[str] = None,
         **kwargs,
@@ -53,6 +54,7 @@ class OID4VPPresentation(BaseRecord):
         self.errors = errors
         self.matched_credentials = matched_credentials
         self.verified = verified
+        self.revoked = revoked
         self.request_id = request_id
         self.dcql_query_id = dcql_query_id
         self.nonce = nonce  # in request
@@ -71,6 +73,7 @@ class OID4VPPresentation(BaseRecord):
                 "errors",
                 "matched_credentials",
                 "verified",
+                "revoked",
                 "nonce",
             )
         }
@@ -145,5 +148,12 @@ class OID4VPPresentationSchema(BaseRecordSchema):
         required=False,
         metadata={
             "description": "Whether or not the presentation was successfully verified"
+        },
+    )
+
+    revoked = fields.Bool(
+        required=False,
+        metadata={
+            "description": "Whether or not the credential was revoked"
         },
     )
