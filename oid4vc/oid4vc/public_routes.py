@@ -729,7 +729,12 @@ async def verify_statuslist(request: web.Request, matched_credentials: Dict[str,
     """Verify a status list."""
     context: AdminRequestContext = request["context"]
 
-    status_list_id = matched_credentials["vc"]["credentialStatus"]["id"]
+    LOGGER.debug("Matched Credentials: %s", matched_credentials)
+
+    key = list(matched_credentials.keys())[0]
+    vc_data = matched_credentials[key]["vc"]
+        
+    status_list_id = vc_data["credentialStatus"]["id"]
     LOGGER.debug("Status List ID: %s", status_list_id)
 
     status_list_credential_url = status_list_id.split("#")[0]
