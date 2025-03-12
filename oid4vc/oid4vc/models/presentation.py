@@ -14,8 +14,6 @@ class OID4VPPresentation(BaseRecord):
     REQUEST_RETRIEVED = "request-retrieved"
     PRESENTATION_INVALID = "presentation-invalid"
     PRESENTATION_VALID = "presentation-valid"
-    STATUS_LIST_REVOKED = "status-list-revoked"
-    STATUS_LIST_VALID = "status-list-valid"
     RECORD_TOPIC = "oid4vp"
     RECORD_TYPE = "oid4vp"
     STATES = (
@@ -23,8 +21,6 @@ class OID4VPPresentation(BaseRecord):
         REQUEST_RETRIEVED,
         PRESENTATION_INVALID,
         PRESENTATION_VALID,
-        STATUS_LIST_REVOKED,
-        STATUS_LIST_VALID
     )
 
     RECORD_ID_NAME = "presentation_id"

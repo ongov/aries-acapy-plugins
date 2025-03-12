@@ -718,7 +718,8 @@ async def post_response(request: web.Request):
         await record.save(
             session,
             reason=
-                f"Presentation verified: {verify_result.verified} Credential Status: {record.revoked}",
+                f"""Presentation verified: {verify_result.verified} 
+                    Credential Status: {record.revoked}""",
         )
 
     LOGGER.debug("Presentation result: %s", record.verified)
