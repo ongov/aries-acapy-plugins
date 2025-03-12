@@ -5,6 +5,9 @@ import json
 import logging
 import time
 import uuid
+import base64
+import gzip
+import bitarray
 from secrets import token_urlsafe
 from urllib.parse import quote
 from typing import Any, Dict, List, Optional
@@ -23,8 +26,8 @@ from acapy_agent.wallet.did_info import DIDInfo
 from acapy_agent.wallet.error import WalletNotFoundError
 from acapy_agent.wallet.jwt import JWTVerifyResult, b64_to_dict
 from acapy_agent.wallet.key_type import ED25519
-from acapy_agent.wallet.util import b64_to_bytes, bytes_to_b64
-from aiohttp import web
+from acapy_agent.wallet.util import b64_to_bytes, bytes_to_b64, pad
+from aiohttp import web, ClientSession
 from aiohttp_apispec import (
     docs,
     form_schema,
@@ -690,13 +693,6 @@ async def post_response(request: web.Request):
     except (StorageError, BaseModelError) as err:
         raise web.HTTPBadRequest(reason=err.roll_up) from err
 
-    if verify_result.verified:
-        record.state = OID4VPPresentation.PRESENTATION_VALID
-    else:
-        record.state = OID4VPPresentation.PRESENTATION_INVALID
-        assert verify_result.details
-        record.errors = [verify_result.details]
-
     record.verified = verify_result.verified
     record.matched_credentials = (
         verify_result.descriptor_id_to_claims
@@ -704,15 +700,94 @@ async def post_response(request: web.Request):
         else verify_result.cred_query_id_to_claims
     )
 
+    status_list_result = await verify_statuslist(request, record.matched_credentials)
+
+    if status_list_result["verified"]:
+        record.revoked = status_list_result["revoked"]
+    else: 
+        record.verified = False
+
+    if verify_result.verified:
+        record.state = OID4VPPresentation.PRESENTATION_VALID
+    else:
+        record.state = OID4VPPresentation.PRESENTATION_INVALID
+        assert verify_result.details
+        record.errors = [verify_result.details]
+
     async with context.session() as session:
         await record.save(
             session,
-            reason=f"Presentation verified: {verify_result.verified}",
+            reason=
+                f"Presentation verified: {verify_result.verified} Credential Status: {record.revoked}",
         )
 
     LOGGER.debug("Presentation result: %s", record.verified)
     return web.Response(status=200)
 
+
+async def verify_statuslist(request: web.Request, matched_credentials: Dict[str, Any]):
+    """Verify a status list."""
+    context: AdminRequestContext = request["context"]
+
+    status_list_id = matched_credentials["vc"]["credentialStatus"]["id"]
+    LOGGER.debug("Status List ID: %s", status_list_id)
+
+    status_list_credential_url = status_list_id.split("#")[0]
+    LOGGER.debug("Status List Credential URL: %s", status_list_credential_url)
+
+    status_list_number = status_list_id.split("#")[1]
+    LOGGER.debug("Status List Number: %s", status_list_number)
+
+    async with ClientSession() as session:
+        async with session.get(
+            status_list_credential_url
+        ) as response:
+            if response.status == 200:
+                try:
+                    status_list_credential = await response.text()
+                except Exception as e:  
+                    LOGGER.error("Error getting status list: %s", e)
+                    raise web.HTTPBadRequest(reason="Status List Credential not found")
+            else:
+                raise web.HTTPBadRequest(reason="Status List Credential not found")
+    
+    LOGGER.debug("Status List Credential: %s", status_list_credential)
+
+    verified = False
+
+    status_list_credential_jws = status_list_credential
+    if not status_list_credential_jws:
+        raise web.HTTPBadRequest(reason="status_list_credential_jws is required")
+    try:
+        async with context.profile.session():
+            result = await jwt_verify(context.profile, 
+                                                 status_list_credential_jws)
+            LOGGER.debug("JWT Verify Result Headers: %s", result.headers)
+            LOGGER.debug("JWT Verify Result Payload: %s", result.payload)
+            verified = result.verified
+            status_list_encoded = result.payload["vc"]["credentialSubject"]["encodedList"]
+            status_list_pad = pad(status_list_encoded)
+            status_list_decoded = base64.urlsafe_b64decode(status_list_pad)
+            status_list = gzip.decompress(status_list_decoded)
+            bitstring = bitarray.bitarray()
+            bitstring.frombytes(status_list)
+            status = bitstring[int(status_list_number)]
+            if status == 1:
+                revoked = True
+            else:
+                revoked = False
+            LOGGER.debug("Credential Revocation Status: %s", status)
+            return ({
+                "verified": verified, 
+                "status_list_vc": result.payload, 
+                "revoked": revoked })
+    except Exception as e:
+        LOGGER.error("Error verifying status list: %s", e)
+        return ({
+            "verified": False,
+            "error_details": "Error verifying status list"
+        })
+  
 
 async def register(app: web.Application, multitenant: bool):
     """Register routes with support for multitenant mode.
