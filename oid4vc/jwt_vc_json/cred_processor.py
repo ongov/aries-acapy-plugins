@@ -22,6 +22,7 @@ from oid4vc.models.presentation import OID4VPPresentation
 from oid4vc.models.supported_cred import SupportedCredential
 from oid4vc.pop_result import PopResult
 from oid4vc.public_routes import types_are_subset
+from oid4vc.status_handler import StatusHandler
 
 LOGGER = logging.getLogger(__name__)
 
@@ -73,16 +74,25 @@ class JwtVcJsonCredProcessor(Issuer, CredVerifier, PresVerifier):
             "sub": subject,
         }
 
+        status_handler = context.inject_or(StatusHandler)
+        if credential_status := await status_handler.assign_status_entries(
+            context, supported.supported_cred_id, ex_record.exchange_id, "w3c"
+        ):
+            payload["vc"]["credentialStatus"] = credential_status
+
         jws = await jwt_sign(
             context.profile,
             {},
             payload,
             verification_method=ex_record.verification_method,
         )
-
+        LOGGER.debug("signed credential: %s", jws)
+        
         return jws
 
-    def validate_credential_subject(self, supported: SupportedCredential, subject: dict):
+    def validate_credential_subject(
+        self, supported: SupportedCredential, subject: dict
+    ):
         """Validate the credential subject."""
         pass
 
@@ -114,3 +124,11 @@ class JwtVcJsonCredProcessor(Issuer, CredVerifier, PresVerifier):
     ) -> VerifyResult:
         """Verify a presentation in JWT VP format."""
         return await self.verify(profile, presentation)
+
+    async def assign_status_entries(
+        self, context: AdminRequestContext, supported_cred_id: str
+    ) -> OID4VCIExchangeRecord:
+        """Assign status entries."""
+
+        status_handler = StatusHandler(context)
+        return await status_handler.assign_status_entries(supported_cred_id, "w3c")

@@ -1,0 +1,46 @@
+name: sync-fork
+on:
+  schedule:
+  - cron: '0 0 * * *'
+  workflow_dispatch: { }
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      # repository-projects: write
+      # actions: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate GitHub CLI
+        run: |
+          echo ${{ secrets.ODCP_DEVSECOPS_GITHUBACTIONS_REPO_SYNC_AUTOMATION_PAT }} | gh auth login --with-token
+
+      - name: Debug Environment
+        run: |
+          gh auth status
+          gh repo view ongov/aries-acapy-plugins --json name,owner
+        env:
+          GITHUB_TOKEN: ${{ secrets.ODCP_DEVSECOPS_GITHUBACTIONS_REPO_SYNC_AUTOMATION_PAT }}
+
+      - name: Sync repository with the upstream
+        run: |
+          DEBUG=1 gh repo sync $REPOSITORY -b $BRANCH_NAME --source openwallet-foundation/acapy-plugins --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.ODCP_DEVSECOPS_GITHUBACTIONS_REPO_SYNC_AUTOMATION_PAT }}
+          GH_TOKEN: ${{ secrets.ODCP_DEVSECOPS_GITHUBACTIONS_REPO_SYNC_AUTOMATION_PAT }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH_NAME: "main"
+
+      - name: Send notification on sync failure
+        if: failure()
+        uses: ./.github/workflows/actions/send-slack-notification
+        with:
+          slack_notification: "Unable to sync the repository with its upstream. See https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} for more information."
+          slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
