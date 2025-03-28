@@ -45,10 +45,12 @@ class StatusHandler:
                         )
                         break
 
-    def assign_status_entries(self, supported_cred_id, exchange_id, status_type):
+    def assign_status_entries(
+        self, context, supported_cred_id, exchange_id, status_type
+    ):
         """Assign status entries."""
 
         if self.handler:
             return self.handler.assign_status_entries(
-                self.context, supported_cred_id, exchange_id, status_type
+                context, supported_cred_id, exchange_id, status_type
             )

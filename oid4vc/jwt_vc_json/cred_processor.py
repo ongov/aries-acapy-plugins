@@ -76,10 +76,10 @@ class JwtVcJsonCredProcessor(Issuer, CredVerifier, PresVerifier):
 
         status_handler = context.inject_or(StatusHandler)
         if credential_status := await status_handler.assign_status_entries(
-            supported.supported_cred_id, ex_record.exchange_id, "w3c"
+            context, supported.supported_cred_id, ex_record.exchange_id, "w3c"
         ):
             payload["vc"]["credentialStatus"] = credential_status
-            LOGGER.debug("signed credential: %s", payload)
+            LOGGER.debug("credential with status: %s", payload)
 
         jws = await jwt_sign(
             context.profile,
@@ -90,7 +90,9 @@ class JwtVcJsonCredProcessor(Issuer, CredVerifier, PresVerifier):
 
         return jws
 
-    def validate_credential_subject(self, supported: SupportedCredential, subject: dict):
+    def validate_credential_subject(
+        self, supported: SupportedCredential, subject: dict
+    ):
         """Validate the credential subject."""
         pass
 
