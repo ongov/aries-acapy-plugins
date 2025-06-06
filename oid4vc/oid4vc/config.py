@@ -35,7 +35,6 @@ class Config:
         host = plugin_settings.get("host") or getenv("OID4VCI_HOST")
         port = int(plugin_settings.get("port") or getenv("OID4VCI_PORT", "0"))
         endpoint = plugin_settings.get("endpoint") or getenv("OID4VCI_ENDPOINT")
-        status_url = plugin_settings.get("status_url") or getenv("OID4VCI_STATUS_URL")
         status_handler = plugin_settings.get("status_handler") or getenv(
             "OID4VCI_STATUS_HANDLER"
         )
@@ -47,4 +46,4 @@ class Config:
         if not endpoint:
             raise ConfigError("endpoint", "OID4VCI_ENDPOINT")
 
-        return cls(host, port, endpoint, status_url, status_handler)
+        return cls(host, port, endpoint, status_handler)

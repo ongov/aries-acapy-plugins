@@ -45,12 +45,16 @@ class StatusHandler:
                         )
                         break
 
-    def assign_status_entries(
-        self, context, supported_cred_id, exchange_id, status_type
-    ):
+    async def assign_status_entries(self, context, supported_cred_id, exchange_id):
         """Assign status entries."""
 
         if self.handler:
-            return self.handler.assign_status_entries(
-                context, supported_cred_id, exchange_id, status_type
+            return await self.handler.assign_status_entries(
+                context, supported_cred_id, exchange_id
             )
+
+    async def get_status_list(self, context, list_number):
+        """Get status list."""
+
+        if self.handler:
+            return await self.handler.get_status_list_token(context, list_number)
