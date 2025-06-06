@@ -9,6 +9,7 @@ from secrets import token_urlsafe
 from urllib.parse import quote
 from typing import Any, Dict, List, Optional
 
+from acapy_agent.config.injection_context import InjectionContext
 from acapy_agent.admin.request_context import AdminRequestContext
 from acapy_agent.core.profile import Profile, ProfileSession
 from acapy_agent.messaging.models.base import BaseModelError
@@ -742,32 +743,36 @@ async def get_status_list(request: web.Request):
         return web.Response(text=status_list)
 
 
-async def register(app: web.Application, multitenant: bool):
+async def register(app: web.Application, multitenant: bool, context: InjectionContext):
     """Register routes with support for multitenant mode.
 
     Adds the subpath with Wallet ID as a path parameter if multitenant is True.
     """
-    subpath = "/tenant/{wallet_id}" if multitenant else ""
-    app.add_routes(
-        [
-            web.get(
-                f"{subpath}/oid4vci/dereference-credential-offer",
-                dereference_cred_offer,
-                allow_head=False,
-            ),
-            web.get(
-                f"{subpath}/.well-known/openid-credential-issuer",
-                credential_issuer_metadata,
-                allow_head=False,
-            ),
-            # TODO Add .well-known/did-configuration.json
-            # Spec: https://identity.foundation/.well-known/resources/did-configuration/
-            web.post(f"{subpath}/token", token),
-            web.post(f"{subpath}/credential", issue_cred),
-            web.get(f"{subpath}/oid4vp/request/{{request_id}}", get_request),
-            web.post(f"{subpath}/oid4vp/response/{{presentation_id}}", post_response),
+    subpath = "/tenant/{wallet_id}"  # if multitenant else ""
+    routes = [
+        web.get(
+            f"{subpath}/oid4vci/dereference-credential-offer",
+            dereference_cred_offer,
+            allow_head=False,
+        ),
+        web.get(
+            f"{subpath}/.well-known/openid-credential-issuer",
+            credential_issuer_metadata,
+            allow_head=False,
+        ),
+        # TODO Add .well-known/did-configuration.json
+        # Spec: https://identity.foundation/.well-known/resources/did-configuration/
+        web.post(f"{subpath}/token", token),
+        web.post(f"{subpath}/credential", issue_cred),
+        web.get(f"{subpath}/oid4vp/request/{{request_id}}", get_request),
+        web.post(f"{subpath}/oid4vp/response/{{presentation_id}}", post_response),
+    ]
+    # Conditionally add status route
+    if context.inject_or(StatusHandler):
+        routes.append(
             web.get(
                 f"{subpath}/status/{{list_number}}", get_status_list, allow_head=False
-            ),
-        ]
-    )
+            )
+        )
+    # Add the routes to the application
+    app.add_routes(routes)
