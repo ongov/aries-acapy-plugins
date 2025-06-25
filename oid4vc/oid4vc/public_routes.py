@@ -9,6 +9,7 @@ from secrets import token_urlsafe
 from urllib.parse import quote
 from typing import Any, Dict, List, Optional
 
+from acapy_agent.config.injection_context import InjectionContext
 from acapy_agent.admin.request_context import AdminRequestContext
 from acapy_agent.core.profile import Profile, ProfileSession
 from acapy_agent.messaging.models.base import BaseModelError
@@ -56,6 +57,7 @@ from .models.exchange import OID4VCIExchangeRecord
 from .models.supported_cred import SupportedCredential
 from .pop_result import PopResult
 from .routes import _parse_cred_offer, CredOfferQuerySchema, CredOfferResponseSchemaVal
+from .status_handler import StatusHandler
 
 LOGGER = logging.getLogger(__name__)
 PRE_AUTHORIZED_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:pre-authorized_code"
@@ -101,7 +103,9 @@ class CredentialIssuerMetadataSchema(OpenAPISchema):
     )
     authorization_server = fields.Str(
         required=False,
-        metadata={"description": "The authorization server endpoint. Currently ignored."},
+        metadata={
+            "description": "The authorization server endpoint. Currently ignored."
+        },
     )
     batch_credential_endpoint = fields.Str(
         required=False,
@@ -235,7 +239,9 @@ async def check_token(
     return result
 
 
-async def handle_proof_of_posession(profile: Profile, proof: Dict[str, Any], nonce: str):
+async def handle_proof_of_posession(
+    profile: Profile, proof: Dict[str, Any], nonce: str
+):
     """Handle proof of posession."""
     encoded_headers, encoded_payload, encoded_signature = proof["jwt"].split(".", 3)
     headers = b64_to_dict(encoded_headers)
@@ -341,7 +347,9 @@ async def issue_cred(request: web.Request):
     if "proof" not in body:
         raise web.HTTPBadRequest(reason=f"proof is required for {supported.format}")
 
-    pop = await handle_proof_of_posession(context.profile, body["proof"], ex_record.nonce)
+    pop = await handle_proof_of_posession(
+        context.profile, body["proof"], ex_record.nonce
+    )
     if not pop.verified:
         raise web.HTTPBadRequest(reason="Invalid proof")
 
@@ -472,9 +480,13 @@ async def get_request(request: web.Request):
             await pres.save(session=session, reason="Retrieved presentation request")
 
             if record.pres_def_id:
-                pres_def = await OID4VPPresDef.retrieve_by_id(session, record.pres_def_id)
+                pres_def = await OID4VPPresDef.retrieve_by_id(
+                    session, record.pres_def_id
+                )
             elif record.dcql_query_id:
-                dcql_query = await DCQLQuery.retrieve_by_id(session, record.dcql_query_id)
+                dcql_query = await DCQLQuery.retrieve_by_id(
+                    session, record.dcql_query_id
+                )
             jwk = await retrieve_or_create_did_jwk(session)
 
     except StorageNotFoundError as err:
@@ -600,7 +612,9 @@ async def verify_pres_def_presentation(
 
     processors = profile.inject(CredProcessors)
     if not submission.descriptor_maps:
-        raise web.HTTPBadRequest(reason="Descriptor map of submission must not be empty")
+        raise web.HTTPBadRequest(
+            reason="Descriptor map of submission must not be empty"
+        )
 
     # TODO: Support longer descriptor map arrays
     if len(submission.descriptor_maps) != 1:
@@ -704,29 +718,61 @@ async def post_response(request: web.Request):
     return web.Response(status=200)
 
 
-async def register(app: web.Application, multitenant: bool):
+class StatusListMatchSchema(OpenAPISchema):
+    """Path parameters and validators for status list request."""
+
+    list_number = fields.Str(
+        required=True,
+        metadata={
+            "description": "Status list number",
+        },
+    )
+
+
+@docs(tags=["status-list"], summary="Get status list by list number")
+@match_info_schema(StatusListMatchSchema())
+async def get_status_list(request: web.Request):
+    """Get status list."""
+
+    context: AdminRequestContext = request["context"]
+    list_number = request.match_info["list_number"]
+
+    status_handler = context.inject_or(StatusHandler)
+    if status_handler:
+        status_list = await status_handler.get_status_list(context, list_number)
+        return web.Response(text=status_list)
+
+
+async def register(app: web.Application, multitenant: bool, context: InjectionContext):
     """Register routes with support for multitenant mode.
 
     Adds the subpath with Wallet ID as a path parameter if multitenant is True.
     """
-    subpath = "/tenant/{wallet_id}" if multitenant else ""
-    app.add_routes(
-        [
+    subpath = "/tenant/{wallet_id}"  # if multitenant else ""
+    routes = [
+        web.get(
+            f"{subpath}/oid4vci/dereference-credential-offer",
+            dereference_cred_offer,
+            allow_head=False,
+        ),
+        web.get(
+            f"{subpath}/.well-known/openid-credential-issuer",
+            credential_issuer_metadata,
+            allow_head=False,
+        ),
+        # TODO Add .well-known/did-configuration.json
+        # Spec: https://identity.foundation/.well-known/resources/did-configuration/
+        web.post(f"{subpath}/token", token),
+        web.post(f"{subpath}/credential", issue_cred),
+        web.get(f"{subpath}/oid4vp/request/{{request_id}}", get_request),
+        web.post(f"{subpath}/oid4vp/response/{{presentation_id}}", post_response),
+    ]
+    # Conditionally add status route
+    if context.inject_or(StatusHandler):
+        routes.append(
             web.get(
-                f"{subpath}/oid4vci/dereference-credential-offer",
-                dereference_cred_offer,
-                allow_head=False,
-            ),
-            web.get(
-                f"{subpath}/.well-known/openid-credential-issuer",
-                credential_issuer_metadata,
-                allow_head=False,
-            ),
-            # TODO Add .well-known/did-configuration.json
-            # Spec: https://identity.foundation/.well-known/resources/did-configuration/
-            web.post(f"{subpath}/token", token),
-            web.post(f"{subpath}/credential", issue_cred),
-            web.get(f"{subpath}/oid4vp/request/{{request_id}}", get_request),
-            web.post(f"{subpath}/oid4vp/response/{{presentation_id}}", post_response),
-        ]
-    )
+                f"{subpath}/status/{{list_number}}", get_status_list, allow_head=False
+            )
+        )
+    # Add the routes to the application
+    app.add_routes(routes)
