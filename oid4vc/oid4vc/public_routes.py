@@ -748,7 +748,7 @@ async def register(app: web.Application, multitenant: bool, context: InjectionCo
 
     Adds the subpath with Wallet ID as a path parameter if multitenant is True.
     """
-    subpath = "/tenant/{wallet_id}"  # if multitenant else ""
+    subpath = "/tenant/{wallet_id} if multitenant else ""
     routes = [
         web.get(
             f"{subpath}/oid4vci/dereference-credential-offer",
