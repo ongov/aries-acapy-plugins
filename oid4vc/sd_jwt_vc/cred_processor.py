@@ -114,7 +114,7 @@ class SdJwtCredIssueProcessor(Issuer, CredVerifier, PresVerifier):
         status_handler = context.inject_or(StatusHandler)
         if status_handler and (
             credential_status := await status_handler.assign_status_entries(
-                context, supported.supported_cred_id, ex_record.exchange_id, "ietf"
+                context, supported.supported_cred_id, ex_record.exchange_id
             )
         ):
             claims["status"] = credential_status
