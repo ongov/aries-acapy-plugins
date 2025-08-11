@@ -776,7 +776,7 @@ async def verify_statuslist(request: web.Request, matched_credentials: Dict[str,
             LOGGER.debug("JWT Verify Result Headers: %s", result.headers)
             LOGGER.debug("JWT Verify Result Payload: %s", result.payload)
             verified = result.verified
-            status_list_encoded = result.payload["encodedList"]
+            status_list_encoded = result.payload["encoded_list"]
             status_list_pad = pad(status_list_encoded)
             status_list_decoded = base64.urlsafe_b64decode(status_list_pad)
             status_list = gzip.decompress(status_list_decoded)
