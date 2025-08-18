@@ -117,7 +117,7 @@ class SdJwtCredIssueProcessor(Issuer, CredVerifier, PresVerifier):
                 context, supported.supported_cred_id, ex_record.exchange_id
             )
         ):
-            claims["status"] = credential_status
+            claims["status_list"] = credential_status
             LOGGER.debug("credential with status: %s", claims)
 
         profile = context.profile
