@@ -59,7 +59,7 @@ def test_write_to_file_success(tmp_path):
     file_path = tmp_path / "test.txt"
     content = b"hello world"
 
-    status_handler.write_to_file(str(file_path), content)
+    status_handler.write_to_file(str(file_path), content, with_alt=True)
 
     assert file_path.exists()
     assert file_path.read_bytes() == content
@@ -79,7 +79,7 @@ def test_write_to_file_success(tmp_path):
     original_replace = os.replace
 
     with patch("status_list.v1_0.status_handler.os.replace", side_effect=flaky_replace):
-        status_handler.write_to_file(str(file_path), content)
+        status_handler.write_to_file(str(file_path), content, with_alt=True)
 
     assert file_path.exists()
     assert file_path.read_bytes() == content
@@ -92,7 +92,7 @@ def test_write_to_file_success(tmp_path):
         "status_list.v1_0.status_handler.os.replace", side_effect=OSError("always fail")
     ):
         with pytest.raises(OSError, match="always fail"):
-            status_handler.write_to_file(str(file_path), content)
+            status_handler.write_to_file(str(file_path), content, with_alt=True)
 
     # Final file should not exist
     assert not file_path.exists()
@@ -105,7 +105,7 @@ def test_write_to_file_success(tmp_path):
         "status_list.v1_0.status_handler.FileLock", side_effect=Timeout("lock timeout")
     ):
         with pytest.raises(Timeout, match="lock timeout"):
-            status_handler.write_to_file(str(file_path), content)
+            status_handler.write_to_file(str(file_path), content, with_alt=True)
 
     assert not file_path.exists()
 

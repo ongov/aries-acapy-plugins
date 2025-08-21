@@ -4,10 +4,12 @@ import logging
 import gzip
 import math
 import os
+import shutil
+import threading
 import time
 import tempfile
 from functools import wraps
-from typing import Optional
+from typing import Optional, Any
 from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from bitarray import bitarray
@@ -27,12 +29,12 @@ from .jwt import jwt_sign
 LOGGER = logging.getLogger(__name__)
 
 
-def with_retries(max_attempts=3, delay=2):
-    """Decorator to retry a function."""
+def with_retries(max_attempts: int = 3, delay: float = 2.0):
+    """Decorator to retry a function with a fixed delay."""
 
     def decorator(func):
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any):
             for attempt in range(1, max_attempts + 1):
                 try:
                     return func(*args, **kwargs)
@@ -47,46 +49,74 @@ def with_retries(max_attempts=3, delay=2):
     return decorator
 
 
-@with_retries(max_attempts=3, delay=2)
-def write_to_file(path: str, data: bytes) -> None:
-    """Write data to a local file atomically."""
+def alt_name(p: Path) -> Path:
+    """Return alternative file name: 'a.txt' -> 'a.alt.txt', 'foo' -> 'foo.alt'."""
+    return (
+        p.with_name(f"{p.stem}.alt{''.join(p.suffixes)}")
+        if p.suffixes
+        else p.with_name(p.name + ".alt")
+    )
 
-    full_path = Path(path).resolve()
+
+def unlink_file(file_path: Path | str | None, delay_seconds: int = 0) -> None:
+    """Unlink a file with an optional delay (best-effort)."""
+    if not file_path:
+        return
     try:
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-        LOGGER.debug(f"Writing to local file (atomic): {full_path}")
-        lock_path = full_path.with_suffix(full_path.suffix + ".lock")
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+        Path(file_path).unlink()
+    except FileNotFoundError:
+        pass
+    except OSError as ex:
+        LOGGER.warning(f"Failed to unlink {file_path}: {ex}")
+
+
+@with_retries(max_attempts=3, delay=2)
+def write_to_file(
+    path: str | Path,
+    data: bytes | bytearray | memoryview,
+    with_alt: bool = False,
+) -> None:
+    """Atomically write `data` to `path`; optionally publish an atomic `.alt` sibling."""
+    full_path = Path(path).absolute()
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = full_path.with_suffix(full_path.suffix + ".lock")
+    alt_path: Path | None = None
+    alt_temp: Path | None = None
+    temp_path: Path | None = None
+    LOGGER.debug(f"Writing to local file: {full_path}")
+
+    try:
         with FileLock(str(lock_path), timeout=10):
-            with tempfile.NamedTemporaryFile(
-                dir=full_path.parent, delete=False
-            ) as tmp_file:
-                tmp_file.write(data)
-                temp_path = Path(tmp_file.name)
-            try:
-                os.replace(temp_path, full_path)
-            except OSError as e:
-                LOGGER.error(f"Failed to replace {temp_path} with {full_path}: {e}")
-                try:
-                    if temp_path.exists():
-                        os.unlink(temp_path)
-                except OSError:
-                    LOGGER.warning(f"Failed to clean up temporary file: {temp_path}")
-                raise
-        LOGGER.debug("Write to local file completed.")
-        # Explicitly remove the lock file (needed on Unix)
-        try:
-            if lock_path.exists():
-                lock_path.unlink()
-        except OSError as e:
-            LOGGER.warning(f"Failed to remove lock file {lock_path}: {e}")
+            with tempfile.NamedTemporaryFile(dir=full_path.parent, delete=False) as tmp:
+                tmp.write(memoryview(data))
+                tmp.flush()
+                os.fsync(tmp.fileno())
+                temp_path = Path(tmp.name)
+
+            if with_alt:
+                alt_path = alt_name(full_path)
+                alt_temp = alt_path.with_suffix(alt_path.suffix + ".tmp")
+                shutil.copy(temp_path, alt_temp)
+                with open(alt_temp, "rb", buffering=0) as f:
+                    os.fsync(f.fileno())
+                os.replace(alt_temp, alt_path)
+
+            os.replace(temp_path, full_path)
+            LOGGER.debug("Write to local file completed.")
+
     except (OSError, Timeout) as e:
         LOGGER.error(f"Failed to write to file {full_path}: {e}")
-        try:
-            if lock_path.exists():
-                lock_path.unlink()
-        except OSError as e:
-            LOGGER.warning(f"Failed to remove lock file {lock_path}: {e}")
         raise
+    finally:
+        unlink_file(temp_path)
+        unlink_file(lock_path)
+        if with_alt:
+            unlink_file(alt_temp)
+            t = threading.Thread(target=unlink_file, args=(alt_path, 10))
+            t.daemon = False
+            t.start()
 
 
 def get_wallet_id(context: AdminRequestContext):
