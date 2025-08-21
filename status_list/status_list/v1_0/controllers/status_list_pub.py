@@ -84,7 +84,7 @@ async def publish_status_list(request: web.BaseRequest):
                     did=definition.issuer_did,
                     verification_method=definition.verification_method,
                 )
-                status_handler.write_to_file(path, jws.encode("utf-8"))
+                status_handler.write_to_file(path, jws.encode("utf-8"), with_alt=True)
             # add status_list to published list
             published.append(status_list)
 
