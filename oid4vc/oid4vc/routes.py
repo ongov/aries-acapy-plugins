@@ -51,9 +51,12 @@ from oid4vc.models.presentation import OID4VPPresentation, OID4VPPresentationSch
 from oid4vc.models.presentation_definition import OID4VPPresDef, OID4VPPresDefSchema
 from oid4vc.models.request import OID4VPRequest, OID4VPRequestSchema
 
+from .app_resources import AppResources
 from .config import Config
 from .models.exchange import OID4VCIExchangeRecord, OID4VCIExchangeRecordSchema
 from .models.supported_cred import SupportedCredential, SupportedCredentialSchema
+from .utils import get_tenant_subpath
+
 
 VCI_SPEC_URI = (
     "https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-11.html"
@@ -375,13 +378,34 @@ class CredOfferResponseSchemaRef(OpenAPISchema):
     offer = fields.Nested(CredOfferSchema(), required=True)
 
 
+async def _get_pre_auth_code(
+    exchange_id: str,
+    supported_cred_id: str | None = None,
+    auth_server_url: str | None = None,
+) -> str:
+    """Create a secure random pre-authorized code."""
+    if auth_server_url:
+        resp = await AppResources.get_http_client().post(
+            f"{auth_server_url}/grants/pre-authorized-code",
+            json={
+                "subject_id": exchange_id,
+                "supported_cred_id": supported_cred_id,
+            },
+            headers={"Authorization": "bearer issuer-bearer-token"},
+        )
+        data = await resp.json()
+        code = data["pre_authorized_code"]
+    else:
+        code = secrets.token_urlsafe(CODE_BYTES)
+    return code
+
+
 async def _parse_cred_offer(context: AdminRequestContext, exchange_id: str) -> dict:
     """Helper function for cred_offer request parsing.
 
     Used in get_cred_offer and public_routes.dereference_cred_offer endpoints.
     """
     config = Config.from_settings(context.settings)
-    code = secrets.token_urlsafe(CODE_BYTES)
 
     try:
         async with context.session() as session:
@@ -389,8 +413,14 @@ async def _parse_cred_offer(context: AdminRequestContext, exchange_id: str) -> d
             supported = await SupportedCredential.retrieve_by_id(
                 session, record.supported_cred_id
             )
-
-            record.code = code
+            auth_server_url = (
+                f"{config.auth_server_url}{get_tenant_subpath(context.profile)}"
+                if config.auth_server_url
+                else None
+            )
+            record.code = await _get_pre_auth_code(
+                record.exchange_id, supported.identifier, auth_server_url
+            )
             record.state = OID4VCIExchangeRecord.STATE_OFFER_CREATED
             await record.save(session, reason="Credential offer created")
     except (StorageError, BaseModelError) as err:
@@ -408,7 +438,7 @@ async def _parse_cred_offer(context: AdminRequestContext, exchange_id: str) -> d
         "credentials": [supported.identifier],
         "grants": {
             "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
-                "pre-authorized_code": code,
+                "pre-authorized_code": record.code,
                 "user_pin_required": user_pin_required,
             }
         },

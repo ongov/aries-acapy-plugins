@@ -22,7 +22,7 @@ from acapy_agent.storage.error import StorageError, StorageNotFoundError
 from acapy_agent.wallet.base import BaseWallet, WalletError
 from acapy_agent.wallet.did_info import DIDInfo
 from acapy_agent.wallet.error import WalletNotFoundError
-from acapy_agent.wallet.jwt import JWTVerifyResult, b64_to_dict
+from acapy_agent.wallet.jwt import b64_to_dict
 from acapy_agent.wallet.key_type import ED25519
 from acapy_agent.wallet.util import b64_to_bytes, bytes_to_b64
 from aiohttp import web
@@ -40,7 +40,7 @@ from marshmallow import fields
 
 from oid4vc.dcql import DCQLQueryEvaluator
 from oid4vc.jwk import DID_JWK
-from oid4vc.jwt import jwt_sign, jwt_verify, key_material_for_kid
+from oid4vc.jwt import jwt_sign, jwt_verify, key_material_for_kid, JWTVerifyResult
 from oid4vc.models.dcql_query import DCQLQuery
 from oid4vc.models.presentation import OID4VPPresentation
 from oid4vc.models.presentation_definition import OID4VPPresDef
@@ -51,6 +51,7 @@ from oid4vc.pex import (
     PresentationSubmission,
 )
 
+from .app_resources import AppResources
 from .config import Config
 from .cred_processor import CredProcessorError, CredProcessors
 from .models.exchange import OID4VCIExchangeRecord
@@ -58,6 +59,7 @@ from .models.supported_cred import SupportedCredential
 from .pop_result import PopResult
 from .routes import _parse_cred_offer, CredOfferQuerySchema, CredOfferResponseSchemaVal
 from .status_handler import StatusHandler
+from .utils import get_tenant_subpath
 
 LOGGER = logging.getLogger(__name__)
 PRE_AUTHORIZED_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:pre-authorized_code"
@@ -103,7 +105,9 @@ class CredentialIssuerMetadataSchema(OpenAPISchema):
     )
     authorization_server = fields.Str(
         required=False,
-        metadata={"description": "The authorization server endpoint. Currently ignored."},
+        metadata={
+            "description": "The authorization server endpoint. Currently ignored."
+        },
     )
     batch_credential_endpoint = fields.Str(
         required=False,
@@ -132,6 +136,8 @@ async def credential_issuer_metadata(request: web.Request):
                 supported.to_issuer_metadata() for supported in credentials_supported
             ],
         }
+        if config.auth_server_url:
+            metadata["token_endpoint"] = f"{config.auth_server_url}{subpath}/token"
 
     LOGGER.debug("METADATA: %s", metadata)
 
@@ -155,6 +161,12 @@ class GetTokenSchema(OpenAPISchema):
 @form_schema(GetTokenSchema())
 async def token(request: web.Request):
     """Token endpoint to exchange pre_authorized codes for access tokens."""
+    config = Config.from_settings(request["context"].settings)
+    if config.auth_server_url:
+        raise web.HTTPNotImplemented(
+            reason="Token endpoint is handled by external Authorization Server."
+        )
+
     context: AdminRequestContext = request["context"]
     form = await request.post()
     LOGGER.debug(f"Token request: {form}")
@@ -181,7 +193,7 @@ async def token(request: web.Request):
             raise web.HTTPBadRequest(reason="pin is invalid")
 
     payload = {
-        "id": record.exchange_id,
+        "sub": record.exchange_id,
         "exp": int(time.time()) + EXPIRES_IN,
     }
     async with context.profile.session() as session:
@@ -217,7 +229,9 @@ async def token(request: web.Request):
 
 
 async def check_token(
-    profile: Profile, auth_header: Optional[str] = None
+    profile: Profile,
+    auth_header: Optional[str] = None,
+    auth_server_url: str | None = None,
 ) -> JWTVerifyResult:
     """Validate the OID4VCI token."""
     if not auth_header:
@@ -226,6 +240,19 @@ async def check_token(
     scheme, cred = auth_header.split(" ")
     if scheme.lower() != "bearer":
         raise web.HTTPUnauthorized()  # Invalid authentication credentials
+
+    if auth_server_url:
+        resp = await AppResources.get_http_client().post(
+            f"{auth_server_url}{get_tenant_subpath(profile)}/introspect",
+            data={"token": cred},
+            headers={"Authorization": "bearer issuer-bearer-token"},
+        )
+        introspect = await resp.json()
+        if not introspect.get("active"):
+            raise web.HTTPUnauthorized(reason="invalid_token")
+        else:
+            result = JWTVerifyResult(headers={}, payload=introspect, verified=True)
+            return result
 
     result = await jwt_verify(profile, cred)
     if not result.verified:
@@ -237,7 +264,9 @@ async def check_token(
     return result
 
 
-async def handle_proof_of_posession(profile: Profile, proof: Dict[str, Any], nonce: str):
+async def handle_proof_of_posession(
+    profile: Profile, proof: Dict[str, Any], nonce: str
+):
     """Handle proof of posession."""
     encoded_headers, encoded_payload, encoded_signature = proof["jwt"].split(".", 3)
     headers = b64_to_dict(encoded_headers)
@@ -310,10 +339,11 @@ async def issue_cred(request: web.Request):
     As validated upon presentation of a valid Access Token.
     """
     context: AdminRequestContext = request["context"]
+    config = Config.from_settings(context.settings)
     token_result = await check_token(
-        context.profile, request.headers.get("Authorization")
+        context.profile, request.headers.get("Authorization"), config.auth_server_url
     )
-    exchange_id = token_result.payload["id"]
+    exchange_id = token_result.payload["sub"]
     body = await request.json()
     LOGGER.info(f"request: {body}")
     try:
@@ -343,7 +373,9 @@ async def issue_cred(request: web.Request):
     if "proof" not in body:
         raise web.HTTPBadRequest(reason=f"proof is required for {supported.format}")
 
-    pop = await handle_proof_of_posession(context.profile, body["proof"], ex_record.nonce)
+    pop = await handle_proof_of_posession(
+        context.profile, body["proof"], ex_record.nonce
+    )
     if not pop.verified:
         raise web.HTTPBadRequest(reason="Invalid proof")
 
@@ -474,9 +506,13 @@ async def get_request(request: web.Request):
             await pres.save(session=session, reason="Retrieved presentation request")
 
             if record.pres_def_id:
-                pres_def = await OID4VPPresDef.retrieve_by_id(session, record.pres_def_id)
+                pres_def = await OID4VPPresDef.retrieve_by_id(
+                    session, record.pres_def_id
+                )
             elif record.dcql_query_id:
-                dcql_query = await DCQLQuery.retrieve_by_id(session, record.dcql_query_id)
+                dcql_query = await DCQLQuery.retrieve_by_id(
+                    session, record.dcql_query_id
+                )
             jwk = await retrieve_or_create_did_jwk(session)
 
     except StorageNotFoundError as err:
@@ -602,7 +638,9 @@ async def verify_pres_def_presentation(
 
     processors = profile.inject(CredProcessors)
     if not submission.descriptor_maps:
-        raise web.HTTPBadRequest(reason="Descriptor map of submission must not be empty")
+        raise web.HTTPBadRequest(
+            reason="Descriptor map of submission must not be empty"
+        )
 
     # TODO: Support longer descriptor map arrays
     if len(submission.descriptor_maps) != 1:
