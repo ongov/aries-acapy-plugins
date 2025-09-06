@@ -6,12 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application configuration."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env.tenant", env_prefix="TENANT_", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="TENANT_", extra="ignore")
 
     APP_ROOT_PATH: str = ""
-    ISSUER_BASE_URL: str
+    APP_TITLE: str = "Aauthorization Server Tenant API"
+    APP_VERSION: str = "0.1.0"
+    OPENAPI_URL: str = ""
+    
+    ISSUER_BASE_URL: str = "http://localhost:8000"
 
     ACCESS_TOKEN_TTL: int = 900
     REFRESH_TOKEN_TTL: int = 604800
@@ -25,10 +27,10 @@ class Settings(BaseSettings):
 
     TRUST_NETWORKS: list[str] = []
 
-    ISSUER_AUTH_TOKEN: str
+    ISSUER_AUTH_TOKEN: str = "issuer_auth_token"
 
-    ADMIN_M2M_BASE_URL: str
-    ADMIN_M2M_AUTH_TOKEN: str
+    ADMIN_INTERNAL_BASE_URL: str = "http://localhost:8001"
+    ADMIN_INTERNAL_AUTH_TOKEN: str = "admin-internal-auth-token"
     CONTEXT_CACHE_TTL: int = 900
 
     KEY_ENC_SECRETS: dict[str, str] = {}

@@ -98,17 +98,21 @@ async def generate_tenant_keypair(
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
+    private_pem_enc = encrypt_private_pem(private_pem)
 
-    public_jwk = jwk.dumps(private_pem, kty="EC", crv="P-256", is_private=False)
+    pub = prv.public_key()
+    public_pem = pub.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode("utf-8")
+    public_jwk = jwk.dumps(public_pem, kty="EC", crv="P-256")
     kid = body.kid or secrets.token_hex(8)
     public_jwk["kid"] = kid
     public_jwk["alg"] = body.alg
     public_jwk["use"] = "sig"
 
-    private_pem_enc = encrypt_private_pem(private_pem)
-
-    now = datetime.now(timezone.utc)
-    not_before = body.not_before or now
+    utcnow = datetime.now(timezone.utc)
+    not_before = body.not_before or utcnow
     not_after = body.not_after
 
     key = TenantKey(
@@ -120,13 +124,12 @@ async def generate_tenant_keypair(
         status=body.status,
         not_before=not_before,
         not_after=not_after,
-        created_at=now,
-        updated_at=now,
+        created_at=utcnow,
     )
 
-    k_repo = TenantKeyRepository(db)
+    repo = TenantKeyRepository(db)
     try:
-        await k_repo.add(key)
+        await repo.add(key)
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -161,8 +164,8 @@ async def update_key_status(
         raise HTTPException(status_code=400, detail="invalid_status")
 
     # Update status via repository
-    k_repo = TenantKeyRepository(db)
-    changed = await k_repo.update_status(t_row.id, kid, new_status)
+    repo = TenantKeyRepository(db)
+    changed = await repo.update_status(t_row.id, kid, new_status)
     if changed == 0:
         raise HTTPException(status_code=404, detail="key_not_found")
     await db.commit()

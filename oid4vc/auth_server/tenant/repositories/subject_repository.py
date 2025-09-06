@@ -21,7 +21,7 @@ class SubjectRepository:
 
     async def create(self, uid: str, metadata: dict | None = None) -> Subject:
         """Create a new subject."""
-        subject = Subject(uid=uid, metadata=metadata or {})
+        subject = Subject(uid=uid, subject_metadata=metadata or {})
         self.db.add(subject)
         await self.db.flush()
         return subject

@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from admin.config import settings
 from admin.deps import db_manager
-from admin.routers import m2m, migrations, tenants
+from admin.routers import tenants, migrations, internal
 from core.logging import get_logger
 from core.observability import RequestContextMiddleware, setup_structlog_json
 
@@ -43,9 +43,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 root_path = settings.APP_ROOT_PATH
 app = FastAPI(
-    root_path=root_path,
-    lifespan=lifespan,
+    title=settings.APP_TITLE,
+    version=settings.APP_VERSION,
+    openapi_url=f"{root_path}{settings.OPENAPI_URL}",
     default_response_class=ORJSONResponse,
+    lifespan=lifespan,
+    root_path=root_path,
 )
 
 app.add_middleware(
@@ -57,10 +60,9 @@ app.add_middleware(
 )
 app.add_middleware(RequestContextMiddleware)
 
-# Keep your two routes
 app.include_router(tenants.router, prefix="/admin", tags=["tenants"])
 app.include_router(migrations.router, prefix="/admin", tags=["migrations"])
-app.include_router(m2m.router, prefix="/m2m", tags=["m2m"])
+app.include_router(internal.router, prefix="/internal", tags=["internal"])
 
 
 @app.get("/healthz")

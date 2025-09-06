@@ -14,6 +14,7 @@ from acapy_agent.admin.request_context import AdminRequestContext
 from acapy_agent.core.profile import Profile, ProfileSession
 from acapy_agent.messaging.models.base import BaseModelError
 from acapy_agent.messaging.models.openapi import OpenAPISchema
+from acapy_agent.messaging.util import datetime_now, datetime_to_str
 from acapy_agent.protocols.present_proof.dif.pres_exch import (
     PresentationDefinition,
 )
@@ -55,6 +56,7 @@ from .app_resources import AppResources
 from .config import Config
 from .cred_processor import CredProcessorError, CredProcessors
 from .models.exchange import OID4VCIExchangeRecord
+from .models.nonce import Nonce
 from .models.supported_cred import SupportedCredential
 from .pop_result import PopResult
 from .routes import _parse_cred_offer, CredOfferQuerySchema, CredOfferResponseSchemaVal
@@ -88,6 +90,14 @@ async def dereference_cred_offer(request: web.BaseRequest):
     )
 
 
+class BatchCredentialIssuanceSchema(OpenAPISchema):
+    """Batch credential issuance schema."""
+
+    batch_size = fields.Int(
+        required=True, metadata={"description": "The maximum array size for the proofs"}
+    )
+
+
 class CredentialIssuerMetadataSchema(OpenAPISchema):
     """Credential issuer metadata schema."""
 
@@ -95,23 +105,27 @@ class CredentialIssuerMetadataSchema(OpenAPISchema):
         required=True,
         metadata={"description": "The credential issuer endpoint."},
     )
+    authorization_servers = fields.List(
+        fields.Str(),
+        required=False,
+        metadata={"description": "The authorization server endpoint."},
+    )
     credential_endpoint = fields.Str(
         required=True,
         metadata={"description": "The credential endpoint."},
     )
-    credentials_supported = fields.List(
+    nonce_endpoint = fields.Str(
+        required=False,
+        metadata={"description": "The nonce endpoint."},
+    )
+    credential_configurations_supported = fields.List(
         fields.Dict(),
         metadata={"description": "The supported credentials."},
     )
-    authorization_server = fields.Str(
+    batch_credential_issuance = fields.Nested(
+        BatchCredentialIssuanceSchema,
         required=False,
-        metadata={
-            "description": "The authorization server endpoint. Currently ignored."
-        },
-    )
-    batch_credential_endpoint = fields.Str(
-        required=False,
-        metadata={"description": "The batch credential endpoint. Currently ignored."},
+        metadata={"description": "The batch credential issuance. Currently ignored."},
     )
 
 
@@ -129,19 +143,55 @@ async def credential_issuer_metadata(request: web.Request):
 
         wallet_id = request.match_info.get("wallet_id")
         subpath = f"/tenant/{wallet_id}" if wallet_id else ""
-        metadata = {
-            "credential_issuer": f"{public_url}{subpath}",
-            "credential_endpoint": f"{public_url}{subpath}/credential",
-            "credentials_supported": [
-                supported.to_issuer_metadata() for supported in credentials_supported
-            ],
-        }
+        metadata: dict[str, Any] = {"credential_issuer": f"{public_url}{subpath}"}
         if config.auth_server_url:
-            metadata["token_endpoint"] = f"{config.auth_server_url}{subpath}/token"
+            metadata["authorization_servers"] = [f"{config.auth_server_url}{subpath}"]
+        metadata["credential_endpoint"] = f"{public_url}{subpath}/credential"
+        metadata["nonce_endpoint"] = f"{public_url}{subpath}/nonce"
+        metadata["credential_configurations_supported"] = [
+            supported.to_issuer_metadata() for supported in credentials_supported
+        ]
 
     LOGGER.debug("METADATA: %s", metadata)
 
     return web.json_response(metadata)
+
+
+async def create_nonce(profile: Profile, nbytes: int, ttl: int) -> Nonce:
+    """Create and store a fresh nonce."""
+    nonce = token_urlsafe(nbytes)
+    issued_at = datetime_now()
+    expires_at = issued_at + datetime.timedelta(seconds=ttl)
+    issued_at_str = datetime_to_str(issued_at)
+    expires_at_str = datetime_to_str(expires_at)
+
+    if issued_at_str is None or expires_at_str is None:
+        raise web.HTTPInternalServerError(reason="Could not generate timestamps")
+
+    nonce_record = Nonce(
+        nonce_value=nonce,
+        used=False,
+        issued_at=issued_at_str,
+        expires_at=expires_at_str,
+    )
+    async with profile.session() as session:
+        await nonce_record.save(session=session, reason="Created new nonce")
+
+    return nonce_record
+
+
+@docs(tags=["oid4vci"], summary="Get a fresh nonce for proof of possession")
+async def get_nonce(request: web.Request):
+    """Get a fresh nonce for proof of possession."""
+    context: AdminRequestContext = request["context"]
+    nonce = await create_nonce(context.profile, NONCE_BYTES, EXPIRES_IN)
+
+    return web.json_response(
+        {
+            "c_nonce": nonce.nonce_value,
+            "expires_in": nonce.expires_at,
+        }
+    )
 
 
 class GetTokenSchema(OpenAPISchema):
@@ -229,9 +279,8 @@ async def token(request: web.Request):
 
 
 async def check_token(
-    profile: Profile,
+    context: AdminRequestContext,
     auth_header: Optional[str] = None,
-    auth_server_url: str | None = None,
 ) -> JWTVerifyResult:
     """Validate the OID4VCI token."""
     if not auth_header:
@@ -241,11 +290,12 @@ async def check_token(
     if scheme.lower() != "bearer":
         raise web.HTTPUnauthorized()  # Invalid authentication credentials
 
-    if auth_server_url:
+    config = Config.from_settings(context.settings)
+    if config.auth_server_url:
         resp = await AppResources.get_http_client().post(
-            f"{auth_server_url}{get_tenant_subpath(profile)}/introspect",
+            f"{config.auth_server_url}{get_tenant_subpath(context.profile)}/introspect",
             data={"token": cred},
-            headers={"Authorization": "bearer issuer-bearer-token"},
+            headers={"Authorization": f"bearer {config.auth_server_bearer}"},
         )
         introspect = await resp.json()
         if not introspect.get("active"):
@@ -254,7 +304,7 @@ async def check_token(
             result = JWTVerifyResult(headers={}, payload=introspect, verified=True)
             return result
 
-    result = await jwt_verify(profile, cred)
+    result = await jwt_verify(context.profile, cred)
     if not result.verified:
         raise web.HTTPUnauthorized()  # Invalid credentials
 
@@ -265,7 +315,7 @@ async def check_token(
 
 
 async def handle_proof_of_posession(
-    profile: Profile, proof: Dict[str, Any], nonce: str
+    profile: Profile, proof: Dict[str, Any], c_nonce: str | None = None
 ):
     """Handle proof of posession."""
     encoded_headers, encoded_payload, encoded_signature = proof["jwt"].split(".", 3)
@@ -287,17 +337,20 @@ async def handle_proof_of_posession(
         raise web.HTTPBadRequest(reason="No key material in proof")
 
     payload = b64_to_dict(encoded_payload)
-
-    if nonce != payload.get("nonce"):
-        raise web.HTTPBadRequest(
-            reason="Invalid proof: wrong nonce.",
-        )
+    nonce = payload.get("nonce")
+    if c_nonce:
+        if c_nonce != nonce:
+            raise web.HTTPBadRequest(reason="Invalid proof: wrong nonce.")
+    else:
+        redeemed = await Nonce.redeem_by_value(profile.session(), nonce)
+        if not redeemed:
+            raise web.HTTPBadRequest(reason="Invalid proof: wrong or used nonce.")
 
     decoded_signature = b64_to_bytes(encoded_signature, urlsafe=True)
     verified = key.verify_signature(
         f"{encoded_headers}.{encoded_payload}".encode(),
         decoded_signature,
-        sig_type=headers.get("alg"),
+        sig_type=headers.get("alg", ""),
     )
     return PopResult(
         headers,
@@ -339,10 +392,7 @@ async def issue_cred(request: web.Request):
     As validated upon presentation of a valid Access Token.
     """
     context: AdminRequestContext = request["context"]
-    config = Config.from_settings(context.settings)
-    token_result = await check_token(
-        context.profile, request.headers.get("Authorization"), config.auth_server_url
-    )
+    token_result = await check_token(context, request.headers.get("Authorization"))
     exchange_id = token_result.payload["sub"]
     body = await request.json()
     LOGGER.info(f"request: {body}")
@@ -373,9 +423,7 @@ async def issue_cred(request: web.Request):
     if "proof" not in body:
         raise web.HTTPBadRequest(reason=f"proof is required for {supported.format}")
 
-    pop = await handle_proof_of_posession(
-        context.profile, body["proof"], ex_record.nonce
-    )
+    pop = await handle_proof_of_posession(context.profile, body["proof"], ex_record.nonce)
     if not pop.verified:
         raise web.HTTPBadRequest(reason="Invalid proof")
 
@@ -506,13 +554,9 @@ async def get_request(request: web.Request):
             await pres.save(session=session, reason="Retrieved presentation request")
 
             if record.pres_def_id:
-                pres_def = await OID4VPPresDef.retrieve_by_id(
-                    session, record.pres_def_id
-                )
+                pres_def = await OID4VPPresDef.retrieve_by_id(session, record.pres_def_id)
             elif record.dcql_query_id:
-                dcql_query = await DCQLQuery.retrieve_by_id(
-                    session, record.dcql_query_id
-                )
+                dcql_query = await DCQLQuery.retrieve_by_id(session, record.dcql_query_id)
             jwk = await retrieve_or_create_did_jwk(session)
 
     except StorageNotFoundError as err:
@@ -638,9 +682,7 @@ async def verify_pres_def_presentation(
 
     processors = profile.inject(CredProcessors)
     if not submission.descriptor_maps:
-        raise web.HTTPBadRequest(
-            reason="Descriptor map of submission must not be empty"
-        )
+        raise web.HTTPBadRequest(reason="Descriptor map of submission must not be empty")
 
     # TODO: Support longer descriptor map arrays
     if len(submission.descriptor_maps) != 1:
@@ -767,6 +809,7 @@ async def get_status_list(request: web.Request):
     if status_handler:
         status_list = await status_handler.get_status_list(context, list_number)
         return web.Response(text=status_list)
+    raise web.HTTPNotFound(reason="Status handler not available")
 
 
 async def register(app: web.Application, multitenant: bool, context: InjectionContext):
@@ -789,6 +832,7 @@ async def register(app: web.Application, multitenant: bool, context: InjectionCo
         # TODO Add .well-known/did-configuration.json
         # Spec: https://identity.foundation/.well-known/resources/did-configuration/
         web.post(f"{subpath}/token", token),
+        web.post(f"{subpath}/nonce", get_nonce),
         web.post(f"{subpath}/credential", issue_cred),
         web.get(f"{subpath}/oid4vp/request/{{request_id}}", get_request),
         web.post(f"{subpath}/oid4vp/response/{{presentation_id}}", post_response),

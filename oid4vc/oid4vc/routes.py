@@ -378,7 +378,7 @@ class CredOfferResponseSchemaRef(OpenAPISchema):
     offer = fields.Nested(CredOfferSchema(), required=True)
 
 
-async def _get_pre_auth_code(
+async def _create_pre_auth_code(
     exchange_id: str,
     supported_cred_id: str | None = None,
     auth_server_url: str | None = None,
@@ -389,7 +389,12 @@ async def _get_pre_auth_code(
             f"{auth_server_url}/grants/pre-authorized-code",
             json={
                 "subject_id": exchange_id,
-                "supported_cred_id": supported_cred_id,
+                "authorization_details": [
+                    {
+                        "type": "openid_credential",
+                        "credential_configuration_id": supported_cred_id,
+                    }
+                ],
             },
             headers={"Authorization": "bearer issuer-bearer-token"},
         )
@@ -418,7 +423,7 @@ async def _parse_cred_offer(context: AdminRequestContext, exchange_id: str) -> d
                 if config.auth_server_url
                 else None
             )
-            record.code = await _get_pre_auth_code(
+            record.code = await _create_pre_auth_code(
                 record.exchange_id, supported.identifier, auth_server_url
             )
             record.state = OID4VCIExchangeRecord.STATE_OFFER_CREATED

@@ -50,20 +50,24 @@ async def create_pre_authorized_code(
     subject_metadata: dict | None,
     user_pin_required: bool,
     user_pin: str | None,
-    authorization_details: dict | None,
+    authorization_details: list | None,
     ttl_seconds: int | None,
 ) -> PreAuthCode:
     """Create a pre-auth code with TTL."""
     sid = await ensure_subject(db, subject_id, subject_metadata)
+    if authorization_details:
+        authorization_details_dict = [ad.model_dump() for ad in authorization_details]
+    else:
+        authorization_details_dict = None
     now = utcnow()
     ttl = ttl_seconds if ttl_seconds and ttl_seconds > 0 else settings.PRE_AUTH_CODE_TTL
-    grepo = GrantRepository(db)
-    pac = await grepo.create_pre_auth_code(
+    repo = GrantRepository(db)
+    pac = await repo.create_pre_auth_code(
         subject_id=sid,
         code=new_code(),
         user_pin=user_pin,
         user_pin_required=bool(user_pin_required),
-        authorization_details=authorization_details or None,
+        authorization_details=authorization_details_dict,
         issued_at=now,
         expires_at=now + timedelta(seconds=ttl),
     )

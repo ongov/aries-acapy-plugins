@@ -31,7 +31,7 @@ class GrantRepository:
         code: str,
         user_pin: str | None,
         user_pin_required: bool,
-        authorization_details: dict | None,
+        authorization_details: list | None,
         issued_at,
         expires_at,
     ) -> PreAuthCode:

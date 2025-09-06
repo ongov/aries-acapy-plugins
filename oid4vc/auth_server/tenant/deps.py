@@ -39,10 +39,13 @@ async def _get_admin_json(client: httpx.AsyncClient, url: str, headers: dict) ->
     return res.json()
 
 
-async def _fetch_tenant_ctx(uid: str) -> dict:
+async def _fetch_tenant_ctx(uid: str | None = None) -> dict:
     """Fetch DB and JWKS from Admin and update cache."""
-    base = f"{settings.ADMIN_M2M_BASE_URL}/tenants/{uid}"
-    headers = {"Authorization": f"Bearer {settings.ADMIN_M2M_AUTH_TOKEN}"}
+    if not uid:
+        raise HTTPException(status_code=400, detail="Missing tenant uid.")
+
+    base = f"{settings.ADMIN_INTERNAL_BASE_URL}/tenants/{uid}"
+    headers = {"Authorization": f"Bearer {settings.ADMIN_INTERNAL_AUTH_TOKEN}"}
     rid = current_request_id()
     if rid:
         headers["X-Request-ID"] = rid

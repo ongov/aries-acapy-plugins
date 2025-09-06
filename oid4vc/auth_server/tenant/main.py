@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import Depends, FastAPI, Path, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +31,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    root_path=root_path, default_response_class=ORJSONResponse, lifespan=lifespan
+    title=settings.APP_TITLE,
+    version=settings.APP_VERSION,
+    openapi_url=f"{root_path}{settings.OPENAPI_URL}",
+    default_response_class=ORJSONResponse,
+    lifespan=lifespan,
+    root_path=root_path,
 )
 
 app.add_middleware(
@@ -49,8 +54,10 @@ app.include_router(grants_router)
 app.include_router(introspect_router)
 
 
-@app.get("/healthz")
-async def health_check(sess: AsyncSession = Depends(get_db_session)):
+@app.get("/tenants/{uid}/healthz")
+async def health_check(
+    uid: str = Path(...), sess: AsyncSession = Depends(get_db_session)
+):
     """Simple health check."""
     return {"ok": True}
 

@@ -9,12 +9,12 @@ from admin.config import settings
 _security = HTTPBearer(auto_error=False)
 
 
-def require_m2m_bearer(
+def require_service_bearer(
     credentials: HTTPAuthorizationCredentials | None = Depends(_security),
 ) -> bool:
     """Validate machine-to-machine Bearer token from settings."""
     token = credentials.credentials if credentials else ""
-    expected = getattr(settings, "M2M_AUTH_TOKEN", "")
+    expected = getattr(settings, "INTERNAL_AUTH_TOKEN", "")
     if not token or token != expected:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -28,4 +28,4 @@ def require_admin_auth(
     credentials: HTTPAuthorizationCredentials | None = Depends(_security),
 ) -> bool:
     """Validate admin routes via Bearer (swap to OIDC later)."""
-    return require_m2m_bearer(credentials)
+    return require_service_bearer(credentials)

@@ -1,4 +1,4 @@
-"""M2M helpers: DB info, JWKS, JWT signing."""
+"""INTERNAL helpers: DB info, JWKS, JWT signing."""
 
 from typing import Dict, List
 from datetime import datetime, timezone, timedelta
@@ -61,7 +61,7 @@ async def get_tenant_jwks(session: AsyncSession, uid: str) -> Dict[str, List[dic
         if not row.public_jwk or not _include(row):
             continue
         jwk_obj = JsonWebKey.import_key(row.public_jwk)
-        keys.append(
-            jwk_obj.as_dict(is_private=False, kid=row.kid, alg=row.alg, use="sig")
-        )
+        jwk_dict = jwk_obj.as_dict(is_private=False, kid=row.kid, alg=row.alg, use="sig")
+        if jwk_dict is not None:
+            keys.append(jwk_dict)
     return {"keys": keys}

@@ -12,10 +12,10 @@
 
 - Current:
   - Admin tenants/migrations: Bearer token
-  - Admin M2M: Bearer token (to be replaced)
+  - Admin internal: Bearer token (to be replaced)
 - Roadmap:
   - Admin tenants/migrations → OIDC (via an identity provider)
-  - Admin M2M → private_key_jwt (client assertion with replay protection)
+  - Admin internal → private_key_jwt (client assertion with replay protection)
 
 ## ⚙️ Bootstrap: Initialize Admin DB
 
@@ -78,10 +78,10 @@ sequenceDiagram
 - Notes:
   - If `ADMIN_KEY_ENC_SECRETS` is omitted or does not contain the active version, secrets are stored as plaintext and a startup warning is logged.
   - Do not set `ADMIN_KEY_ENC_SECRETS` to an empty string; use `{}` or remove the variable.
-- M2M Helpers
-  - GET `/m2m/tenants/{uid}/db`
-  - GET `/m2m/tenants/{uid}/jwks`
-  - POST `/m2m/tenants/{uid}/jwts`
+- Internal Helpers
+  - GET `/internal/tenants/{uid}/db`
+  - GET `/internal/tenants/{uid}/jwks`
+  - POST `/internal/tenants/{uid}/jwts`
 
 ## 🗄️ Data Model
 

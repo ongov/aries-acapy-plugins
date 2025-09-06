@@ -33,14 +33,14 @@ ADMIN_DB_HOST=localhost
 ADMIN_DB_PORT=5432
 ADMIN_DB_NAME=auth_server_admin
 ADMIN_DB_SCHEMA=admin
-ADMIN_M2M_AUTH_TOKEN=admin-m2m-token
+ADMIN_INTERNAL_AUTH_TOKEN=admin-internal-token
 ```
 
 ### Minimal .env.tenant
 ```
 TENANT_ISSUER_BASE_URL=http://localhost:8000
-TENANT_ADMIN_M2M_BASE_URL=http://localhost:8001/m2m
-TENANT_ADMIN_M2M_AUTH_TOKEN=admin-m2m-token
+TENANT_ADMIN_INTERNAL_BASE_URL=http://localhost:8001/internal
+TENANT_ADMIN_INTERNAL_AUTH_TOKEN=admin-internal-token
 TENANT_ISSUER_AUTH_TOKEN=issuer-bearer-token
 ```
 

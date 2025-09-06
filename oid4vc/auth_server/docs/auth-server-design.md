@@ -340,7 +340,7 @@ sequenceDiagram
 
 To prevent replay attacks in the credential issuance process, the `/nonce` endpoint provides a unique, time-bound nonce for use in the `/credential` request proof. Controls:
 
-- Nonces are stored in the `NONCE` table with a unique `value`, `used` flag, and `expires_at`. The `credential_id` links to the `SUBJECT.subject_id` (UUID).
+- Nonces are stored in the `NONCE` table with a unique `value`, `used` flag, and `expires_at`.
 - The Issuer validates that the nonce exists, is unused, and unexpired; then marks it `used`.
 - Invalid/expired → HTTP 400 `invalid_request`.
 - Periodic cleanup of expired nonces.
@@ -735,7 +735,6 @@ erDiagram
 
     NONCE {
         INT id PK
-        UUID credential_id FK
         TEXT value UK
         BOOLEAN used
         TIMESTAMPTZ issued_at

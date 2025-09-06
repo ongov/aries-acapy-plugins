@@ -16,6 +16,7 @@
             "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
+            "envFile": "${workspaceFolder}/.env.admin",
             "args": [
                 "admin.main:app",
                 "--host",
@@ -33,6 +34,7 @@
             "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
+            "envFile": "${workspaceFolder}/.env.tenant",
             "args": [
                 "tenant.main:app",
                 "--host",

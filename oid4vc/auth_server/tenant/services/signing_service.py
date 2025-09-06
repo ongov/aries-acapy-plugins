@@ -25,11 +25,11 @@ async def remote_sign_jwt(
     *, uid: str, claims: dict, kid: str | None = None
 ) -> dict[str, Any]:
     """Sign a JWT via the admin API (with retries for transient errors)."""
-    url = f"{settings.ADMIN_M2M_BASE_URL}/tenants/{uid}/jwts"
-    payload = {"claims": claims}
+    url = f"{settings.ADMIN_INTERNAL_BASE_URL}/tenants/{uid}/jwts"
+    payload: dict[str, Any] = {"claims": claims}
     if kid:
         payload["kid"] = kid
-    headers = {"Authorization": f"Bearer {settings.ADMIN_M2M_AUTH_TOKEN}"}
+    headers = {"Authorization": f"Bearer {settings.ADMIN_INTERNAL_AUTH_TOKEN}"}
     rid = current_request_id()
     if rid:
         headers["X-Request-ID"] = rid

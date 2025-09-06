@@ -1,20 +1,22 @@
-"""API for tenant M2M helpers: DB info, JWKS, JWT signing."""
+"""API for tenant SERVICE helpers: DB info, JWKS, JWT signing."""
 
 from fastapi import APIRouter, Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.deps import get_db_session
-from admin.security.bearer import require_m2m_bearer
-from admin.schemas.m2m import (
+from admin.security.bearer import require_service_bearer
+from admin.schemas.internal import (
     JwtSignRequest,
     JwtSignResponse,
     TenantDbResponse,
     TenantJwksResponse,
 )
-from admin.services.m2m_service import get_tenant_db, get_tenant_jwks
+from admin.services.internal_service import get_tenant_db, get_tenant_jwks
 from admin.services.signing_service import sign_tenant_jwt
 
-router = APIRouter(prefix="/tenants/{uid}", dependencies=[Depends(require_m2m_bearer)])
+router = APIRouter(
+    prefix="/tenants/{uid}", dependencies=[Depends(require_service_bearer)]
+)
 
 
 @router.get("/db", response_model=TenantDbResponse)

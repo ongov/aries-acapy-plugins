@@ -6,11 +6,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application configuration."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env.admin", env_prefix="ADMIN_", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_prefix="ADMIN_", extra="ignore")
 
     APP_ROOT_PATH: str = ""
+    APP_TITLE: str = "Aauthorization Server Admin API"
+    APP_VERSION: str = "0.1.0"
+    OPENAPI_URL: str = ""
 
     DB_DRIVER_ASYNC: str = "postgresql+asyncpg"
     DB_DRIVER_SYNC: str = "postgresql+psycopg"
@@ -19,13 +20,13 @@ class Settings(BaseSettings):
 
     DB_NAME: str = "auth_server_admin"
     DB_SCHEMA: str = "admin"
-    DB_USER: str
-    DB_PASSWORD: str
+    DB_USER: str = "postgres"
+    DB_PASSWORD: str = "postgres"
 
     TENANT_DB_NAME: str = "auth_server_tenant"
     TENANT_DB_SCHEMA: str = "auth"
 
-    M2M_AUTH_TOKEN: str
+    INTERNAL_AUTH_TOKEN: str = "internal_auth_token"
 
     KEY_VERIFY_GRACE_TTL: int = 604800  # seconds, JWKS grace after retirement
     KEY_ENC_SECRETS: dict[str, str] = {}

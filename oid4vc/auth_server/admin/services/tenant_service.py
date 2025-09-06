@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 import psycopg
 from fastapi import HTTPException
+from psycopg import sql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.config import settings
@@ -93,26 +94,26 @@ class TenantService:
                 row = cur.fetchone()
                 if row is None:
                     cur.execute(
-                        psycopg.sql.SQL("CREATE ROLE {} WITH LOGIN PASSWORD {}").format(
-                            psycopg.sql.Identifier(db_user),
-                            psycopg.sql.Literal(db_password),
+                        sql.SQL("CREATE ROLE {} WITH LOGIN PASSWORD {}").format(
+                            sql.Identifier(db_user),
+                            sql.Literal(db_password),
                         )
                     )
                 else:
                     cur.execute(
-                        psycopg.sql.SQL("ALTER ROLE {} WITH LOGIN PASSWORD {}").format(
-                            psycopg.sql.Identifier(db_user),
-                            psycopg.sql.Literal(db_password),
+                        sql.SQL("ALTER ROLE {} WITH LOGIN PASSWORD {}").format(
+                            sql.Identifier(db_user),
+                            sql.Literal(db_password),
                         )
                     )
                 cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (db_name,))
                 if cur.fetchone() is None:
                     cur.execute(
-                        psycopg.sql.SQL(
+                        sql.SQL(
                             "CREATE DATABASE {} OWNER {} "
                             "ENCODING 'UTF8' TEMPLATE template0"
                         ).format(
-                            psycopg.sql.Identifier(db_name),
-                            psycopg.sql.Identifier(db_user),
+                            sql.Identifier(db_name),
+                            sql.Identifier(db_user),
                         )
                     )
