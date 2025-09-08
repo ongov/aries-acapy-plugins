@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     APP_TITLE: str = "Aauthorization Server Tenant API"
     APP_VERSION: str = "0.1.0"
     OPENAPI_URL: str = ""
-    
+
     ISSUER_BASE_URL: str = "http://localhost:8000"
 
     ACCESS_TOKEN_TTL: int = 900
