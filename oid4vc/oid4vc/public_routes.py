@@ -145,7 +145,10 @@ async def credential_issuer_metadata(request: web.Request):
         subpath = f"/tenant/{wallet_id}" if wallet_id else ""
         metadata: dict[str, Any] = {"credential_issuer": f"{public_url}{subpath}"}
         if config.auth_server_url:
-            metadata["authorization_servers"] = [f"{config.auth_server_url}{subpath}"]
+            auth_tenant_subpath = get_tenant_subpath(context.profile)
+            metadata["authorization_servers"] = [
+                f"{config.auth_server_url}{auth_tenant_subpath}"
+            ]
         metadata["credential_endpoint"] = f"{public_url}{subpath}/credential"
         metadata["nonce_endpoint"] = f"{public_url}{subpath}/nonce"
         metadata["credential_configurations_supported"] = [
