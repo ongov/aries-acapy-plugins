@@ -68,7 +68,6 @@ app.include_router(internal.router, prefix="/internal", tags=["internal"])
 @app.get("/healthz")
 async def health_check():
     """Simple health check."""
-    # Verify DB readiness by opening a session and executing a trivial query
     try:
         async with db_manager.session() as session:
             await session.execute(text("SELECT 1"))

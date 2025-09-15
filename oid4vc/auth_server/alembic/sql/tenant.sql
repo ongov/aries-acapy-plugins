@@ -1,3 +1,15 @@
+CREATE TABLE IF NOT EXISTS client (
+  id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  client_id TEXT NOT NULL UNIQUE,
+  client_auth_method TEXT NOT NULL,
+  client_auth_signing_alg TEXT,
+  client_secret TEXT,
+  jwks JSONB,
+  jwks_uri TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW (),
+  updated_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS subject (
   id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   uid TEXT NOT NULL UNIQUE,

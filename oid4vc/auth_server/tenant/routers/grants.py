@@ -7,9 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tenant.deps import get_db_session
 from tenant.schemas.grant import PreAuthGrantIn, PreAuthGrantOut
 from tenant.services.grant_service import create_pre_authorized_code
-from tenant.security.bearer import require_bearer
+from tenant.models import Client as AuthClient
+from tenant.security.client_auth import client_auth
 
-# Router is scoped to a specific tenant by uid in the path.
 router = APIRouter(prefix="/tenants/{uid}")
 
 
@@ -17,12 +17,12 @@ router = APIRouter(prefix="/tenants/{uid}")
     "/grants/pre-authorized-code",
     tags=["protected"],
     response_model=PreAuthGrantOut,
-    dependencies=[Depends(require_bearer)],
     response_class=ORJSONResponse,
 )
 async def issue_pre_authorized_code(
     body: PreAuthGrantIn,
     uid: str = Path(...),
+    client: AuthClient = Depends(client_auth),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Issue a pre-authorized code for the current tenant."""

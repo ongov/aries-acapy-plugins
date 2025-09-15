@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TENANT_", extra="ignore")
 
     APP_ROOT_PATH: str = ""
-    APP_TITLE: str = "Aauthorization Server Tenant API"
+    APP_TITLE: str = "OAuth 2.0 Authorization Server Tenant API"
     APP_VERSION: str = "0.1.0"
     OPENAPI_URL: str = ""
 
@@ -25,13 +25,12 @@ class Settings(BaseSettings):
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
 
-    TRUST_NETWORKS: list[str] = []
-
-    ISSUER_AUTH_TOKEN: str = "issuer_auth_token"
+    TRUSTED_NETWORKS: list[str] = []
 
     ADMIN_INTERNAL_BASE_URL: str = "http://localhost:8001"
     ADMIN_INTERNAL_AUTH_TOKEN: str = "admin-internal-auth-token"
     CONTEXT_CACHE_TTL: int = 900
+    WELL_KNOWN_CACHE_TTL: int = 300
 
     KEY_ENC_SECRETS: dict[str, str] = {}
     KEY_ENC_VERSION: int = 1

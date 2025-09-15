@@ -6,19 +6,20 @@ from fastapi import Request
 
 from tenant.config import settings
 from tenant.deps import get_tenant_jwks
+from tenant.oauth.consts import OAuth2GrantType
 
 try:
-    _TRUST_NETWORKS = [
+    _TRUSTED_NETWORKS = [
         ipaddress.ip_network(cidr.strip())
-        for cidr in getattr(settings, "TRUST_NETWORKS", [])
+        for cidr in getattr(settings, "TRUSTED_NETWORKS", [])
         if cidr and cidr.strip()
     ]
 except ValueError:
-    _TRUST_NETWORKS = []
+    _TRUSTED_NETWORKS = []
 
 
 def is_internal_request(request: Request) -> bool:
-    """Return True if client IP is inside any configured CIDR in TRUST_NETWORKS."""
+    """Return True if client IP is inside any configured CIDR in TRUSTED_NETWORKS."""
     host = getattr(request.client, "host", None)
     if not host:
         return False
@@ -26,7 +27,7 @@ def is_internal_request(request: Request) -> bool:
         ip_obj = ipaddress.ip_address(host)
     except ValueError:
         return False
-    return any(ip_obj in net for net in _TRUST_NETWORKS)
+    return any(ip_obj in net for net in _TRUSTED_NETWORKS)
 
 
 def build_openid_configuration(uid: str, request: Request) -> dict:
@@ -38,8 +39,8 @@ def build_openid_configuration(uid: str, request: Request) -> dict:
         "token_endpoint": f"{base_url}/token",
         "token_endpoint_auth_methods_supported": ["none"],
         "grant_types_supported": [
-            "urn:ietf:params:oauth:grant-type:pre-authorized_code",
-            "refresh_token",
+            OAuth2GrantType.PRE_AUTH_CODE,
+            OAuth2GrantType.REFRESH_TOKEN,
         ],
         "authorization_details_types_supported": ["openid_credential"],
         "jwks_uri": f"{base_url}/.well-known/jwks.json",
@@ -47,6 +48,15 @@ def build_openid_configuration(uid: str, request: Request) -> dict:
 
     if is_internal_request(request):
         doc["introspection_endpoint"] = f"{base_url}/introspect"
+        doc["introspection_endpoint_auth_methods_supported"] = [
+            "private_key_jwt",
+            "client_secret_basic",
+            "shared_bearer",
+        ]
+        doc["introspection_endpoint_auth_signing_alg_values_supported"] = [
+            "ES256",
+            "HS256",
+        ]
 
     return doc
 

@@ -3,7 +3,8 @@
 from fastapi import APIRouter, Path, Request, Response
 from fastapi.responses import ORJSONResponse
 
-from tenant.services.well_known import (
+from tenant.config import settings
+from tenant.services.well_known_service import (
     build_openid_configuration,
     load_tenant_jwks,
 )
@@ -21,7 +22,8 @@ async def openid_configuration(
 ):
     """Return OIDC discovery for the tenant."""
     payload = build_openid_configuration(uid, request)
-    response.headers["Cache-Control"] = "public, max-age=300"
+    ttl = settings.CONTEXT_CACHE_TTL
+    response.headers["Cache-Control"] = f"public, max-age={ttl}"
     return payload
 
 
@@ -37,5 +39,6 @@ async def jwks(
 ):
     """Return JWKS (RFC 7517) for the tenant."""
     keys = await load_tenant_jwks(uid)
-    response.headers["Cache-Control"] = "public, max-age=300"
+    ttl = settings.CONTEXT_CACHE_TTL
+    response.headers["Cache-Control"] = f"public, max-age={ttl}"
     return keys

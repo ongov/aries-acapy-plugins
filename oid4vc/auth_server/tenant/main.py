@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import Depends, FastAPI, Path, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,16 +54,20 @@ app.include_router(grants_router)
 app.include_router(introspect_router)
 
 
+@app.get("/tenants/healthz")
+async def health_check():
+    """Simple tenant server health check."""
+    return {"status": "ok"}
+
+
 @app.get("/tenants/{uid}/healthz")
-async def health_check(
-    uid: str = Path(...), sess: AsyncSession = Depends(get_db_session)
-):
-    """Simple health check."""
-    return {"ok": True}
+async def tenant_health_check(uid: str, db: AsyncSession = Depends(get_db_session)):
+    """Tenant-scoped health check; DB connectivity is verified by dependency ping."""
+    return {"status": "ok", "tenant": uid}
 
 
 @app.exception_handler(Exception)
-async def log_unhandled_exception(request: Request, exc: Exception):
+async def log_unhandled_exception(request: Request, ex: Exception):
     """Log unhandled exceptions with request context."""
     logger.exception(
         "unhandled_exception",
@@ -73,5 +77,5 @@ async def log_unhandled_exception(request: Request, exc: Exception):
     )
     return ORJSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal Server Error"},
+        content={"status": "fail", "error": f"Internal Server Error: {ex}"},
     )

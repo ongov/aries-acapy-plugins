@@ -20,4 +20,5 @@ def downgrade() -> None:
       DROP TABLE IF EXISTS auth.access_token;
       DROP TABLE IF EXISTS auth.pre_auth_code;
       DROP TABLE IF EXISTS auth.subject;
+      DROP TABLE IF EXISTS auth.client;
     """)

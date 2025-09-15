@@ -19,10 +19,29 @@ class GrantRepository:
         res = await self.db.execute(stmt)
         return res.scalar_one_or_none()
 
-    async def mark_used(self, pac: PreAuthCode) -> None:
-        """Mark a PAC as used."""
-        stmt = update(PreAuthCode).where(PreAuthCode.id == pac.id).values(used=True)
-        await self.db.execute(stmt)
+    async def mark_used(self, pac: PreAuthCode) -> bool:
+        """Mark PAC used if previously unused; return True if updated."""
+        stmt = (
+            update(PreAuthCode)
+            .where(PreAuthCode.id == pac.id, PreAuthCode.used.is_(False))
+            .values(used=True)
+        )
+        res = await self.db.execute(stmt)
+        return bool(res.rowcount and res.rowcount > 0)
+
+    async def consume_valid(self, pac_id: int, now) -> bool:
+        """Atomically consume PAC if unexpired and unused; return True if consumed."""
+        stmt = (
+            update(PreAuthCode)
+            .where(
+                PreAuthCode.id == pac_id,
+                PreAuthCode.used.is_(False),
+                PreAuthCode.expires_at > now,
+            )
+            .values(used=True)
+        )
+        res = await self.db.execute(stmt)
+        return bool(res.rowcount and res.rowcount > 0)
 
     async def create_pre_auth_code(
         self,

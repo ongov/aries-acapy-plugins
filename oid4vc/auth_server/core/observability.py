@@ -1,9 +1,8 @@
 """Observability helpers: structlog JSON + request context."""
 
-from __future__ import annotations
-
 import logging
-import typing as _t
+import time
+import typing
 import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -15,7 +14,7 @@ try:
     from structlog.contextvars import bind_contextvars, clear_contextvars
     from structlog.contextvars import get_contextvars as _get_ctxvars
     from structlog.processors import TimeStamper
-    from structlog.stdlib import ProcessorFormatter
+    from structlog.stdlib import ProcessorFormatter, ExtraAdder
 
     HAS_STRUCTLOG = True
 except Exception:  # pragma: no cover - optional dependency
@@ -39,6 +38,7 @@ def setup_structlog_json() -> bool:
     shared_processors = [
         structlog.processors.add_log_level,
         TimeStamper(fmt="iso", utc=True),
+        ExtraAdder(),  # include stdlib `extra` dict fields
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
@@ -77,9 +77,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         """Constructor."""
         super().__init__(app)
         self.header_name = header_name
+        self._logger = logging.getLogger(__name__)
 
     async def dispatch(
-        self, request: Request, call_next: _t.Callable[[Request], _t.Awaitable[Response]]
+        self,
+        request: Request,
+        call_next: typing.Callable[[Request], typing.Awaitable[Response]],
     ):
         """Bind request_id to logs and set X-Request-ID header."""
         request_id = request.headers.get(self.header_name)
@@ -92,11 +95,39 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 method=request.method,
                 path=request.url.path,
             )
+        start = time.perf_counter()
         try:
+            self._logger.info(
+                "http.request.start",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "client_host": getattr(request.client, "host", None),
+                },
+            )
             response = await call_next(request)
         finally:
             if HAS_STRUCTLOG and clear_contextvars is not None:
                 clear_contextvars()
+
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        try:
+            client_id = getattr(request.state, "client_id", None)
+            self._logger.info(
+                "http.request.end",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": getattr(response, "status_code", None),
+                    "duration_ms": duration_ms,
+                    "client_id": client_id,
+                },
+            )
+        except Exception:
+            # Logging failures should not affect response delivery
+            pass
 
         response.headers[self.header_name] = request_id
         return response

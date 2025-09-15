@@ -5,13 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Current File",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
-        },
-        {
             "name": "Admin API",
             "type": "debugpy",
             "request": "launch",
@@ -46,6 +39,26 @@
                 "--forwarded-allow-ips=*"
             ],
             "jinja": true
+        },
+        {
+            "name": "Alembic Migrate",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/alembic/admin/migrate.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env.admin",
+        },
+        {
+            "name": "Dev Seed",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/resources/dev_seed.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env.admin",
+            "args": [
+                "--uid",
+                "60a15d1e-052a-4a4c-9fc6-2576a630f069"
+            ]
         }
     ]
 }

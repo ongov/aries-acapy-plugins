@@ -20,10 +20,10 @@
 
 ## 🔐 Environment Files
 
-- Copy the examples to local files and update values:
-  - `cp .env.admin.example .env.admin`
-  - `cp .env.tenant.example .env.tenant`
-- Do not commit real `.env.*` files. The repo ignores them; only `*.example` are tracked.
+- Copy the example envs to local files and update values:
+  - `cp resources/.env.admin.example .env.admin`
+  - `cp resources/.env.tenant.example .env.tenant`
+- Do not commit real `.env.*` files. The repo ignores them; only `resources/*.example` are tracked.
 
 ### Minimal .env.admin
 ```
@@ -41,7 +41,6 @@ ADMIN_INTERNAL_AUTH_TOKEN=admin-internal-token
 TENANT_ISSUER_BASE_URL=http://localhost:8000
 TENANT_ADMIN_INTERNAL_BASE_URL=http://localhost:8001/internal
 TENANT_ADMIN_INTERNAL_AUTH_TOKEN=admin-internal-token
-TENANT_ISSUER_AUTH_TOKEN=issuer-bearer-token
 ```
 
 ## ✅ Health Checks

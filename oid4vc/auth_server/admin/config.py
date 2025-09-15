@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ADMIN_", extra="ignore")
 
     APP_ROOT_PATH: str = ""
-    APP_TITLE: str = "Aauthorization Server Admin API"
+    APP_TITLE: str = "OAuth 2.0 Authorization Server Admin API"
     APP_VERSION: str = "0.1.0"
     OPENAPI_URL: str = ""
 

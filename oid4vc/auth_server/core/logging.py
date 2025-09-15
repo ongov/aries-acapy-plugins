@@ -1,8 +1,4 @@
-"""Logging helpers.
-
-Unified entrypoint `get_logger` that prefers structlog when available, and
-falls back to stdlib logging with optional console/file handlers.
-"""
+"""Logging helpers: unified `get_logger` with structlog or stdlib fallback."""
 
 import os
 import logging
@@ -26,11 +22,7 @@ def get_logger(
     enable_console: bool = True,
     enable_file: bool = False,
 ):
-    """Get a logger instance.
-
-    If structlog is installed and configured, return a structlog logger.
-    Otherwise, return a stdlib logger with the configured handlers.
-    """
+    """Return a structlog logger if available, else a configured stdlib logger."""
 
     if HAS_STRUCTLOG:
         # Defer import use to avoid type issues when structlog missing

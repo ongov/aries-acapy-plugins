@@ -37,7 +37,7 @@ class TokenService:
         now = utcnow()
 
         pac = await grant_repo.get_by_code(code)
-        if pac is None or pac.used or pac.expires_at <= now:
+        if pac is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_request"
             )
@@ -45,7 +45,12 @@ class TokenService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_request"
             )
-        await grant_repo.mark_used(pac)
+        # Atomically consume the PAC to prevent race/double-spend
+        consumed = await grant_repo.consume_valid(pac.id, now)
+        if not consumed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_request"
+            )
 
         if not pac.subject or not pac.subject.uid:
             raise HTTPException(

@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 
 # Generate a new EC private key (P-256 curve)
 openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out ec-private.pem

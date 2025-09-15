@@ -375,12 +375,12 @@ sequenceDiagram
 
 ### Authorization Server
 
-| Endpoint                            | Method | Auth              | Description                          |
-| ----------------------------------- | ------ | ----------------- | ------------------------------------ |
-| `/token`                            | POST   | DPoP + att PoP    | Token exchange (pre-auth or refresh) |
-| `/introspect`                       | POST   | ClientId + Secret | Token validation + attestation       |
-| `/grants/pre-authorized-code`       | POST   | ClientId + Secret | Issue a pre-authorized code grant.   |
-| `/.well-known/openid-configuration` | GET    | None              | Auth Server metadata discovery       |
+| Endpoint                            | Method | Auth                                      | Description                          |
+| ----------------------------------- | ------ | ----------------------------------------- | ------------------------------------ |
+| `/token`                            | POST   | DPoP + optional attestation PoP           | Token exchange (pre-auth or refresh) |
+| `/introspect`                       | POST   | private_key_jwt \| client_secret_basic \| shared_bearer | Token validation + attestation       |
+| `/grants/pre-authorized-code`       | POST   | private_key_jwt \| client_secret_basic \| shared_bearer | Issue a pre-authorized code grant.   |
+| `/.well-known/openid-configuration` | GET    | None                                      | Auth Server metadata discovery       |
 
 ### Credential Issuer
 
@@ -678,7 +678,7 @@ erDiagram
     SUBJECT ||--o{ ACCESS_TOKEN : manages
     SUBJECT ||--o{ REFRESH_TOKEN : manages
     SUBJECT ||--o{ DPOP_JTI : manages
-    SUBJECT ||--o{ NONCE : manages
+    CLIENT
 
     SUBJECT {
         INT id PK
@@ -740,6 +740,18 @@ erDiagram
         TIMESTAMPTZ issued_at
         TIMESTAMPTZ expires_at
     }
+
+    CLIENT {
+        INT id PK
+        TEXT client_id UK
+        TEXT client_auth_method
+        TEXT client_auth_signing_alg
+        TEXT client_secret
+        JSONB jwks
+        TEXT jwks_uri
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 **Note**: ACCESS_TOKEN.metadata may include amr and attestation outcome.
@@ -749,6 +761,7 @@ erDiagram
 ## 🛡️ Enhancements & Security Notes
 
 - **Logging**: Audit issuance, revocation, refresh events, and attestation outcomes.
+- **Observability**: Middleware logs request start/end with `request_id`, `method`, `path`, `status_code`, and `duration_ms`; protected routes include `client_id`.
 - **Rate Limiting**: Throttle abuse or brute-force attempts.
 - **Token Format**: Access tokens are JWTs with claims (`aud`, `exp`, `cnf`, `amr`, etc.).
 - **DPoP Key Lifecycle**: Clients manage DPoP key pairs; rotate if compromised.
