@@ -1,4 +1,4 @@
-"""OAuth2/OIDC constants."""
+"""Global constants."""
 
 
 class OAuth2Flow:

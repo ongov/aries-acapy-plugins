@@ -14,11 +14,11 @@ from fastapi.security import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.consts import CLIENT_AUTH_METHODS
+from core.consts import ClientAuthMethod as CLIENT_AUTH_METHOD
 from core.crypto import verify_secret_pbkdf2
+from core.models import Client as AuthClient
 from tenant.deps import get_db_session
-from tenant.models import Client as AuthClient
-from tenant.oauth.consts import CLIENT_AUTH_METHODS
-from tenant.oauth.consts import ClientAuthMethod as CLIENT_AUTH_METHOD
 from tenant.repositories.client_repository import ClientRepository
 
 bearer_security = HTTPBearer(auto_error=False)

@@ -22,9 +22,9 @@ from admin.schemas.tenant import TenantIn
 from admin.services.alembic_service import run_tenant_migration
 from admin.utils.crypto import encrypt_db_password, encrypt_private_pem
 from admin.utils.db_utils import build_sync_url, resolve_tenant_urls, url_to_dsn
+from core.consts import CLIENT_AUTH_METHODS, ClientAuthMethod
 from core.crypto import hash_secret_pbkdf2
-from tenant.models import Client
-from tenant.oauth.consts import CLIENT_AUTH_METHODS, ClientAuthMethod
+from core.models import Client
 from tenant.repositories.client_repository import ClientRepository
 
 
@@ -187,7 +187,9 @@ class TenantService:
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         ).decode("utf-8")
-        public_jwk = JsonWebKey.import_key(public_pem).as_dict()
+        public_jwk = JsonWebKey.import_key(public_pem).as_dict()  # type: ignore
+        if public_jwk is None:
+            raise HTTPException(status_code=500, detail="Failed to create JWK from PEM")
 
         kid = body.kid or secrets.token_hex(8)
         public_jwk["kid"] = kid

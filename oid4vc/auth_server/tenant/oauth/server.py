@@ -9,7 +9,7 @@ from authlib.oauth2.rfc6749.errors import (
 )
 from fastapi import HTTPException as FastAPIHTTPException
 
-from tenant.oauth.consts import OAuth2Flow
+from core.consts import OAuth2Flow
 from tenant.oauth.grants import PreAuthorizedCodeGrant, RotatingRefreshTokenGrant
 from tenant.oauth.integration.context import get_context
 from tenant.oauth.integration.server import CoreAuthorizationServer

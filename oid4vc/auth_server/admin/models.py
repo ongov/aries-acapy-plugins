@@ -4,18 +4,13 @@ from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, ForeignKey, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
+from core.models import Base
 from admin.config import settings
 
 
-class AdminBase(DeclarativeBase):
-    """Base class for declarative models."""
-
-    pass
-
-
-class Tenant(AdminBase):
+class Tenant(Base):
     """Tenant model."""
 
     __tablename__ = "tenant"
@@ -43,7 +38,7 @@ class Tenant(AdminBase):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class TenantKey(AdminBase):
+class TenantKey(Base):
     """Tenant signing key model."""
 
     __tablename__ = "tenant_key"
