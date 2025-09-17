@@ -50,5 +50,9 @@ async def introspect_access_token(
         resp["attestation"] = meta.get("attestation")
     if meta.get("scope"):
         resp["scope"] = meta.get("scope")
+    if meta.get("c_nonce"):
+        resp["c_nonce"] = meta.get("c_nonce")
+    if meta.get("c_nonce_expires_in"):
+        resp["c_nonce_expires_in"] = meta.get("c_nonce_expires_in")
 
     return resp

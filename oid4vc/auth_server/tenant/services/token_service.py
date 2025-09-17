@@ -1,5 +1,8 @@
 """Issue/rotate tokens via remote signer, using tenant DB only."""
 
+import secrets
+from typing import Any
+
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,13 +70,18 @@ class TokenService:
         }
         if pac.authorization_details:
             claims["authorization_details"] = pac.authorization_details
+        if settings.INCLUDE_NONCE:
+            c_nonce = secrets.token_urlsafe(settings.NONCE_BYTES)
+            c_nonce_expires_in = settings.ACCESS_TOKEN_TTL
+            claims["c_nonce"] = c_nonce
+            claims["c_nonce_expires_in"] = c_nonce_expires_in
 
         sign_res = await remote_sign_jwt(
             uid=uid,
             claims=claims,
         )
 
-        token_meta = {"iss": issuer, "realm": realm}
+        token_meta: dict[str, Any] = {"iss": issuer, "realm": realm}
         if pac.authorization_details:
             token_meta["authorization_details"] = pac.authorization_details
         access_token = await access_repo.create(
@@ -140,6 +148,11 @@ class TokenService:
         }
         if prev_authz:
             claims["authorization_details"] = prev_authz
+        if settings.INCLUDE_NONCE:
+            c_nonce = secrets.token_urlsafe(settings.NONCE_BYTES)
+            c_nonce_expires_in = settings.ACCESS_TOKEN_TTL
+            claims["c_nonce"] = c_nonce
+            claims["c_nonce_expires_in"] = c_nonce_expires_in
 
         sign_res = await remote_sign_jwt(
             uid=uid,

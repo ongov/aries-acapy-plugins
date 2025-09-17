@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, Form, Path
 from fastapi.responses import ORJSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.models import Client as AuthClient
 from tenant.deps import get_db_session
-from tenant.models import Client as AuthClient
 from tenant.security.client_auth import client_auth
 from tenant.services.introspect_service import introspect_access_token
 

@@ -62,4 +62,5 @@ class RefreshTokenRepository:
             .returning(RefreshToken.subject_id, RefreshToken.access_token_id)
         )
         res = await self.db.execute(stmt)
-        return res.first()
+        row = res.first()
+        return tuple(row) if row is not None else None

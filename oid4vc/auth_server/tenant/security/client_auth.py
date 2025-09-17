@@ -70,9 +70,7 @@ async def client_auth(
         token = cred
         scheme = "bearer"
         try:
-            unverified_obj = jwt.decode(
-                token, key=None, claims_cls=None, header_cls=None, claims_options={}
-            )
+            unverified_obj = jwt.decode(token, key="")
             claims: dict[str, Any] = unverified_obj or {}
             client_id = claims.get("iss") or claims.get("sub")
         except Exception:
@@ -119,18 +117,16 @@ async def client_auth(
         keys = JsonWebKey.import_key_set(jwks)
         try:
             decoded = jwt.decode(token, keys)  # type: ignore[arg-type]
-            decoded.validate(
-                now=None,
-                leeway=30,
-                audience=_audiences_for(request),
-                claims_options={
-                    "iss": {"essential": True},
-                    "sub": {"essential": True},
-                    "aud": {"essential": True},
-                    "exp": {"essential": True},
-                    "iat": {"essential": True},
-                },
-            )
+            decoded.validate(now=None, leeway=30)
+            for claim in ("iss", "sub", "aud", "exp", "iat"):
+                if claim not in decoded:
+                    raise HTTPException(status_code=401, detail=f"missing_{claim}")
+            aud = decoded.get("aud")
+            expected_aud = _audiences_for(request)
+            if isinstance(aud, str):
+                aud = [aud]
+            if not aud or not any(a in expected_aud for a in aud):
+                raise HTTPException(status_code=401, detail="invalid_audience")
         except Exception:
             raise HTTPException(status_code=401, detail="invalid_client_assertion")
         if client.client_auth_signing_alg:
@@ -152,18 +148,16 @@ async def client_auth(
             raise HTTPException(status_code=401, detail="unauthorized_client")
         try:
             decoded = jwt.decode(token, secret)  # type: ignore[arg-type]
-            decoded.validate(
-                now=None,
-                leeway=30,
-                audience=_audiences_for(request),
-                claims_options={
-                    "iss": {"essential": True},
-                    "sub": {"essential": True},
-                    "aud": {"essential": True},
-                    "exp": {"essential": True},
-                    "iat": {"essential": True},
-                },
-            )
+            decoded.validate(now=None, leeway=30)
+            for claim in ("iss", "sub", "aud", "exp", "iat"):
+                if claim not in decoded:
+                    raise HTTPException(status_code=401, detail=f"missing_{claim}")
+            aud = decoded.get("aud")
+            expected_aud = _audiences_for(request)
+            if isinstance(aud, str):
+                aud = [aud]
+            if not aud or not any(a in expected_aud for a in aud):
+                raise HTTPException(status_code=401, detail="invalid_audience")
         except Exception:
             raise HTTPException(status_code=401, detail="invalid_client_assertion")
         # Optional alg check

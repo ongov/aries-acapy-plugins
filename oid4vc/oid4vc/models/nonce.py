@@ -2,6 +2,10 @@
 
 from acapy_agent.core.profile import ProfileSession
 from acapy_agent.messaging.models.base_record import BaseRecord, BaseRecordSchema
+from acapy_agent.messaging.valid import (
+    ISO8601_DATETIME_EXAMPLE,
+    ISO8601_DATETIME_VALIDATE,
+)
 from acapy_agent.messaging.util import datetime_now, str_to_datetime
 from marshmallow import fields
 
@@ -93,11 +97,19 @@ class NonceSchema(BaseRecordSchema):
         required=True,
         metadata={"description": "Whether the nonce has been used"},
     )
-    issued_at = fields.DateTime(
+    issued_at = fields.Str(
         required=True,
-        metadata={"description": "Timestamp when nonce was issued"},
+        validate=ISO8601_DATETIME_VALIDATE,
+        metadata={
+            "description": "Timestamp when nonce was issued",
+            "example": ISO8601_DATETIME_EXAMPLE,
+        },
     )
-    expires_at = fields.DateTime(
+    expires_at = fields.Str(
         required=True,
-        metadata={"description": "Timestamp when nonce expires"},
+        validate=ISO8601_DATETIME_VALIDATE,
+        metadata={
+            "description": "Timestamp when nonce expires",
+            "example": ISO8601_DATETIME_EXAMPLE,
+        },
     )

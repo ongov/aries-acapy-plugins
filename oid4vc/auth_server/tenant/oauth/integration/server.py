@@ -26,7 +26,7 @@ class CoreAuthorizationServer(AuthorizationServer):
 
     def handle_error_response(self, request, error):
         """Return (status, body, headers) and add no-store."""
-        status, payload, headers = super().handle_error_response(request, error)
+        status, payload, headers = super().handle_error_response(request, error)  # type: ignore[misc]
         return status, payload, headers + NO_STORE
 
     async def create_token_response_async(
