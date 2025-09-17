@@ -155,6 +155,37 @@ async def credential_issuer_metadata(request: web.Request):
             supported.identifier: supported.to_issuer_metadata()
             for supported in credentials_supported
         }
+        # Optional parameters from draft 13
+        optional_params = {
+            "authorization_servers": [],  # List[str]
+            "batch_credential_endpoint": None,  # str
+            "batch_credential_issuance": {
+                "batch_size": None  # int (REQUIRED if present)
+            },
+            "nonce_endpoint": None,  # str
+            "deferred_credential_endpoint": None,  # str
+            "notification_endpoint": None,  # str
+            "credential_response_encryption": {
+                "alg_values_supported": [],  # List[str] (REQUIRED if present)
+                "enc_values_supported": [],  # List[str] (REQUIRED if present)
+                "encryption_required": None,  # bool (REQUIRED if present)
+            },
+            "credential_identifiers_supported": None,  # bool
+            "signed_metadata": None,  # str (JWT)
+            "display": [
+                {
+                    "name": None,  # str (OPTIONAL)
+                    "locale": None,  # str (OPTIONAL)
+                    "logo": {
+                        "url": None,  # str (REQUIRED if logo present)
+                        "alt_text": None,  # str (OPTIONAL)
+                    },
+                }
+            ],
+            "logo_uri": None,  # str
+            "policy_uri": None,  # str
+            "tos_uri": None,  # str
+        }
 
     LOGGER.debug("METADATA: %s", metadata)
 
