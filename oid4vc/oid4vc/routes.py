@@ -549,7 +549,7 @@ class SupportedCredCreateRequestSchema(OpenAPISchema):
                     "degree": {},
                     "gpa": {"display": [{"name": "GPA"}]},
                 },
-                "types": ["VerifiableCredential", "UniversityDegreeCredential"],
+                "type": ["VerifiableCredential", "UniversityDegreeCredential"],
             },
         },
     )

@@ -104,12 +104,13 @@ class SupportedCredential(BaseRecord):
         }
 
         issuer_metadata["id"] = self.identifier
+        issuer_metadata["credential_definition"] = self.format_data or {}
 
-        # Flatten the format specific metadata into the object
-        issuer_metadata = {
-            **issuer_metadata,
-            **(self.format_data or {}),
-        }
+        # # Flatten the format specific metadata into the object
+        # issuer_metadata = {
+        #     **issuer_metadata,
+        #     **(self.format_data or {}),
+        # }
         return issuer_metadata
 
 

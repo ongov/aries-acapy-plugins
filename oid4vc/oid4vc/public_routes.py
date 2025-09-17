@@ -150,10 +150,10 @@ async def credential_issuer_metadata(request: web.Request):
                 f"{config.auth_server_url}{auth_tenant_subpath}"
             ]
         metadata["credential_endpoint"] = f"{public_url}{subpath}/credential"
-        metadata["nonce_endpoint"] = f"{public_url}{subpath}/nonce"
-        metadata["credential_configurations_supported"] = [
-            supported.to_issuer_metadata() for supported in credentials_supported
-        ]
+        metadata["credential_configurations_supported"] = {
+            supported.identifier: supported.to_issuer_metadata() 
+            for supported in credentials_supported
+        }
 
     LOGGER.debug("METADATA: %s", metadata)
 
