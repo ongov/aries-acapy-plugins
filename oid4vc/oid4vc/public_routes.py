@@ -61,7 +61,7 @@ from .models.supported_cred import SupportedCredential
 from .pop_result import PopResult
 from .routes import _parse_cred_offer, CredOfferQuerySchema, CredOfferResponseSchemaVal
 from .status_handler import StatusHandler
-from .utils import get_tenant_subpath
+from .utils import get_auth_header, get_tenant_subpath
 
 LOGGER = logging.getLogger(__name__)
 PRE_AUTHORIZED_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:pre-authorized_code"
@@ -315,22 +315,32 @@ async def token(request: web.Request):
 
 async def check_token(
     context: AdminRequestContext,
-    auth_header: Optional[str] = None,
+    bearer: Optional[str] = None,
 ) -> JWTVerifyResult:
     """Validate the OID4VCI token."""
-    if not auth_header:
+    if not bearer:
         raise web.HTTPUnauthorized()  # no authentication
 
-    scheme, cred = auth_header.split(" ")
+    scheme, cred = bearer.split(" ")
     if scheme.lower() != "bearer":
         raise web.HTTPUnauthorized()  # Invalid authentication credentials
 
     config = Config.from_settings(context.settings)
+    profile = context.profile
+    subpath = get_tenant_subpath(profile, tenant_prefix="/tenant")
+    issuer_server_url = f"{config.endpoint}{subpath}"
+
+    auth_server_url = f"{config.auth_server_url}{get_tenant_subpath(profile)}"
+    introspect_endpoint = f"{auth_server_url}/introspect"
+
+    auth_header = await get_auth_header(
+        profile, config, issuer_server_url, introspect_endpoint
+    )
     if config.auth_server_url:
         resp = await AppResources.get_http_client().post(
-            f"{config.auth_server_url}{get_tenant_subpath(context.profile)}/introspect",
+            introspect_endpoint,
             data={"token": cred},
-            headers={"Authorization": f"bearer {config.auth_server_bearer}"},
+            headers={"Authorization": auth_header},
         )
         introspect = await resp.json()
         if not introspect.get("active"):

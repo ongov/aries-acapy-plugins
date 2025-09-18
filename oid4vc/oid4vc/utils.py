@@ -21,7 +21,7 @@ def get_tenant_subpath(profile: Profile, tenant_prefix: str = "/tenants") -> str
         if profile.settings.get("multitenant.enabled")
         else None
     )
-    # wallet_id = "538451fa-11ab-41de-b6e3-7ae3df7356d6"
+    wallet_id = wallet_id or "538451fa-11ab-41de-b6e3-7ae3df7356d6"
     tenant_subpath = f"{tenant_prefix}/{wallet_id}" if wallet_id else ""
     return tenant_subpath
 

@@ -47,6 +47,26 @@ def _audiences_for(request: Request) -> list[str]:
     return [base]
 
 
+def _validate_jwt_alg(token: str, expected_alg: str):
+    """Validate the 'alg' field in the JWT header."""
+    header = jwt_header_unverified(token)
+    if header.get("alg") != expected_alg:
+        raise HTTPException(status_code=401, detail="invalid_alg")
+
+
+def _validate_jwt_claims(decoded: dict[str, Any], request: Request):
+    """Validate standard JWT claims."""
+    for claim in ("iss", "sub", "aud", "exp", "iat"):
+        if claim not in decoded:
+            raise HTTPException(status_code=401, detail=f"missing_{claim}")
+    aud = decoded.get("aud")
+    expected_aud = _audiences_for(request)
+    if isinstance(aud, str):
+        aud = [aud]
+    if not aud or not any(a in expected_aud for a in aud):
+        raise HTTPException(status_code=401, detail="invalid_audience")
+
+
 async def base_client_auth(
     db: AsyncSession,
     request: Request,
@@ -56,29 +76,28 @@ async def base_client_auth(
     """Authenticate client and return the persisted Client model."""
     client_id: str | None = None
     token: str | None = None
-    unverified_obj: Any | None = None
 
     scheme = credentials.scheme.lower() if credentials and credentials.scheme else ""
     cred = credentials.credentials if credentials else ""
 
     if scheme == "bearer" and cred:
         token = cred
-        scheme = "bearer"
         try:
-            unverified_obj = jwt_payload_unverified(token)
-            claims: dict[str, Any] = unverified_obj or {}
+            claims = jwt_payload_unverified(token) or {}
             client_id = claims.get("sub")
         except Exception as ex:
             logger.exception("Failed to decode bearer token: %s", ex)
             raise HTTPException(status_code=401, detail="invalid_client_assertion")
     elif basic_creds and basic_creds.username is not None:
-        # Basic auth
-        scheme = "basic"
         client_id = basic_creds.username
         token = basic_creds.password or ""
+        scheme = "basic"
     else:
-        # Unsupported auth
-        client_id = None
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="unauthorized",
+            headers={"WWW-Authenticate": "Bearer, Basic"},
+        )
 
     if not client_id or not token:
         raise HTTPException(
@@ -96,7 +115,6 @@ async def base_client_auth(
     if allowed not in set(CLIENT_AUTH_METHODS):
         raise HTTPException(status_code=401, detail="unauthorized_client")
 
-    # Enforce scheme/method
     if allowed == CLIENT_AUTH_METHOD.CLIENT_SECRET_BASIC and scheme != "basic":
         raise HTTPException(status_code=401, detail="unauthorized_client")
     if (
@@ -107,13 +125,7 @@ async def base_client_auth(
 
     if allowed == CLIENT_AUTH_METHOD.PRIVATE_KEY_JWT:
         if client.client_auth_signing_alg:
-            try:
-                header = jwt_header_unverified(token)
-                if header.get("alg") != client.client_auth_signing_alg:
-                    raise HTTPException(status_code=401, detail="invalid_alg")
-            except Exception:
-                raise HTTPException(status_code=401, detail="invalid_client_assertion")
-
+            _validate_jwt_alg(token, client.client_auth_signing_alg)
         jwks = await _load_jwks(client)
         if not isinstance(jwks, dict) or not jwks.get("keys"):
             raise HTTPException(status_code=401, detail="invalid_client_keys")
@@ -121,68 +133,35 @@ async def base_client_auth(
         try:
             decoded = jwt.decode(token, keys)  # type: ignore[arg-type]
             decoded.validate(now=None, leeway=30)
-            for claim in ("iss", "sub", "aud", "exp", "iat"):
-                if claim not in decoded:
-                    raise HTTPException(status_code=401, detail=f"missing_{claim}")
-            aud = decoded.get("aud")
-            expected_aud = _audiences_for(request)
-            if isinstance(aud, str):
-                aud = [aud]
-            if not aud or not any(a in expected_aud for a in aud):
-                raise HTTPException(status_code=401, detail="invalid_audience")
+            _validate_jwt_claims(decoded, request)
         except Exception:
             raise HTTPException(status_code=401, detail="invalid_client_assertion")
-
         request.state.client_id = str(client.client_id)
-
         return client
 
     if allowed == CLIENT_AUTH_METHOD.SHARED_KEY_JWT:
-        # HS* JWT with client secret
         secret = client.client_secret or ""
         if not secret:
             raise HTTPException(status_code=401, detail="unauthorized_client")
+        if client.client_auth_signing_alg:
+            _validate_jwt_alg(token, client.client_auth_signing_alg)
         try:
             decoded = jwt.decode(token, secret)  # type: ignore[arg-type]
             decoded.validate(now=None, leeway=30)
-            for claim in ("iss", "sub", "aud", "exp", "iat"):
-                if claim not in decoded:
-                    raise HTTPException(status_code=401, detail=f"missing_{claim}")
-            aud = decoded.get("aud")
-            expected_aud = _audiences_for(request)
-            if isinstance(aud, str):
-                aud = [aud]
-            if not aud or not any(a in expected_aud for a in aud):
-                raise HTTPException(status_code=401, detail="invalid_audience")
+            _validate_jwt_claims(decoded, request)
         except Exception:
             raise HTTPException(status_code=401, detail="invalid_client_assertion")
-        # Optional alg check
-        if client.client_auth_signing_alg:
-            try:
-                header = jwt.get_unverified_header(token)  # type: ignore[arg-type]
-                if header.get("alg") != client.client_auth_signing_alg:
-                    raise HTTPException(status_code=401, detail="invalid_alg")
-            except HTTPException:
-                raise
-            except Exception:
-                raise HTTPException(status_code=401, detail="invalid_client_assertion")
-        # Ensure iss == sub == client_id
         claims = decoded if isinstance(decoded, dict) else {}
-        iss = claims.get("iss")
-        sub = claims.get("sub")
-        if not iss or not sub or str(iss) != str(sub) or str(iss) != str(client_id):
+        if str(claims.get("sub")) != str(client_id):
             raise HTTPException(status_code=401, detail="invalid_client")
         request.state.client_id = str(client.client_id)
         return client
 
     if allowed == CLIENT_AUTH_METHOD.CLIENT_SECRET_BASIC:
         secret_hash = client.client_secret
-        if secret_hash and token:
-            if verify_secret_pbkdf2(token, secret_hash):
-                request.state.client_id = str(client.client_id)
-                return client
-            raise HTTPException(status_code=401, detail="invalid_client")
-        raise HTTPException(status_code=401, detail="unauthorized_client")
+        if secret_hash and token and verify_secret_pbkdf2(token, secret_hash):
+            request.state.client_id = str(client.client_id)
+            return client
+        raise HTTPException(status_code=401, detail="invalid_client")
 
-    # Fallback deny
     raise HTTPException(status_code=401, detail="unauthorized_client")
