@@ -102,14 +102,10 @@ class SupportedCredential(BaseRecord):
             )
             if (value := getattr(self, prop)) is not None
         }
-
         issuer_metadata["id"] = self.identifier
-
-        # Flatten the format specific metadata into the object
-        issuer_metadata = {
-            **issuer_metadata,
-            **(self.format_data or {}),
-        }
+        issuer_metadata["credential_definition"] = (
+            self.format_data if self.format_data else {}
+        )
         return issuer_metadata
 
 

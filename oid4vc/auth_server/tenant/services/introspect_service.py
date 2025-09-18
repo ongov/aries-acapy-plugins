@@ -4,8 +4,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.security.utils import utcnow
 from tenant.repositories.access_token_repository import AccessTokenRepository
-from tenant.utils.security import utcnow
 
 
 async def introspect_access_token(

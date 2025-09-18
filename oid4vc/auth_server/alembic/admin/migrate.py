@@ -7,7 +7,7 @@ import sys
 
 from admin.config import settings
 from admin.utils.db_utils import mask_dsn
-from core.logging import get_logger
+from core.utils.logging import get_logger
 
 logger = get_logger(__name__)
 

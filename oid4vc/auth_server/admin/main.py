@@ -10,9 +10,12 @@ from sqlalchemy import text
 
 from admin.config import settings
 from admin.deps import db_manager
-from admin.routers import tenants, migrations, internal
-from core.logging import get_logger
-from core.observability import RequestContextMiddleware, setup_structlog_json
+from admin.routers import internal, migrations, tenants
+from core.observability.observability import (
+    RequestContextMiddleware,
+    setup_structlog_json,
+)
+from core.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -86,9 +89,11 @@ async def log_unhandled_exception(request: Request, exc: Exception):
     """Log unhandled exceptions with request context."""
     logger.exception(
         "unhandled_exception",
-        method=request.method,
-        path=request.url.path,
-        path_params=dict(request.path_params),
+        extra={
+            "method": f"{request.method}",
+            "path": f"{request.url.path}",
+            "path_params": f"{dict(request.path_params)}",
+        },
     )
     return ORJSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

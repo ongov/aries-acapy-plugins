@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from admin.config import settings
 from admin.schemas.client import ClientCreateIn
 from admin.services.tenant_service import TenantService
-from core.db import DatabaseSessionManager
+from core.db.db import DatabaseSessionManager
 
 
 def _gen_es256_keypair() -> tuple[str, dict[str, Any]]:

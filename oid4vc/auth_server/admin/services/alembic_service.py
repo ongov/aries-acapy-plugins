@@ -2,7 +2,7 @@
 
 from alembic import command
 from alembic.config import Config
-from core.paths import tenant_alembic_dir
+from core.utils.paths import tenant_alembic_dir
 
 
 def run_tenant_migration(

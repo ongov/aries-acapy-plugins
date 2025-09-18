@@ -1,6 +1,6 @@
 """Admin database session manager (no auth here)."""
 
-from core.db import DatabaseSessionManager, make_session_dependency
+from core.db.db import DatabaseSessionManager, make_session_dependency
 
 
 db_manager = DatabaseSessionManager(search_path="admin")

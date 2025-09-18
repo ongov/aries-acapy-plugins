@@ -3,9 +3,8 @@
 from logging.config import fileConfig
 
 from alembic import context
-
-from core.alembic import run_offline, run_online
-from admin.models import AdminBase as Base
+from core.db.alembic import run_offline, run_online
+from core.models import Base
 
 config = context.config
 if config.config_file_name is not None:

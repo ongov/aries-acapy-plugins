@@ -8,8 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.logging import get_logger
-from core.observability import RequestContextMiddleware, setup_structlog_json
+from core.observability.observability import (
+    RequestContextMiddleware,
+    setup_structlog_json,
+)
+from core.utils.logging import get_logger
 from tenant.config import settings
 
 from .deps import get_db_session
@@ -71,9 +74,11 @@ async def log_unhandled_exception(request: Request, ex: Exception):
     """Log unhandled exceptions with request context."""
     logger.exception(
         "unhandled_exception",
-        method=request.method,
-        path=request.url.path,
-        path_params=dict(request.path_params),
+        extra={
+            "method": f"{request.method}",
+            "path": f"{request.url.path}",
+            "path_params": f"{dict(request.path_params)}",
+        },
     )
     return ORJSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

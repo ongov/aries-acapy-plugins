@@ -6,18 +6,18 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tenant.config import settings
-from tenant.repositories.access_token_repository import AccessTokenRepository
-from tenant.repositories.grant_repository import GrantRepository
-from tenant.repositories.refresh_token_repository import RefreshTokenRepository
-from tenant.services.signing_service import remote_sign_jwt
-from tenant.utils.security import (
+from core.security.utils import (
     compute_access_exp,
     compute_refresh_exp,
     hash_token,
     new_refresh_token,
     utcnow,
 )
+from tenant.config import settings
+from tenant.repositories.access_token_repository import AccessTokenRepository
+from tenant.repositories.grant_repository import GrantRepository
+from tenant.repositories.refresh_token_repository import RefreshTokenRepository
+from tenant.services.signing_service import remote_sign_jwt
 
 
 class TokenService:
@@ -82,6 +82,9 @@ class TokenService:
         )
 
         token_meta: dict[str, Any] = {"iss": issuer, "realm": realm}
+        if settings.INCLUDE_NONCE:
+            token_meta["c_nonce"] = c_nonce
+            token_meta["c_nonce_expires_in"] = str(c_nonce_expires_in)
         if pac.authorization_details:
             token_meta["authorization_details"] = pac.authorization_details
         access_token = await access_repo.create(
@@ -160,6 +163,9 @@ class TokenService:
         )
 
         token_meta = {"iss": issuer, "realm": realm}
+        if settings.INCLUDE_NONCE:
+            token_meta["c_nonce"] = c_nonce
+            token_meta["c_nonce_expires_in"] = str(c_nonce_expires_in)
         if prev_authz:
             token_meta["authorization_details"] = prev_authz
         new_access_token = await access_repo.create(

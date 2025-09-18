@@ -23,9 +23,9 @@ from admin.services.alembic_service import run_tenant_migration
 from admin.utils.crypto import encrypt_db_password, encrypt_private_pem
 from admin.utils.db_utils import build_sync_url, resolve_tenant_urls, url_to_dsn
 from core.consts import CLIENT_AUTH_METHODS, ClientAuthMethod
-from core.crypto import hash_secret_pbkdf2
+from core.crypto.crypto import hash_secret_pbkdf2
 from core.models import Client
-from tenant.repositories.client_repository import ClientRepository
+from core.repositories.client_repository import ClientRepository
 
 
 class TenantService:
@@ -262,7 +262,7 @@ class TenantService:
         if not signing_alg:
             if method == ClientAuthMethod.PRIVATE_KEY_JWT:
                 signing_alg = "ES256"
-            elif method == ClientAuthMethod.SHARED_BEARER:
+            elif method == ClientAuthMethod.SHARED_KEY_JWT:
                 signing_alg = "HS256"
 
         # Validate fields by method
@@ -271,7 +271,7 @@ class TenantService:
             if not (data.jwks or data.jwks_uri):
                 raise HTTPException(status_code=400, detail="jwks_or_uri_required")
         elif method in (
-            ClientAuthMethod.SHARED_BEARER,
+            ClientAuthMethod.SHARED_KEY_JWT,
             ClientAuthMethod.CLIENT_SECRET_BASIC,
         ):
             if not data.client_secret:

@@ -2,8 +2,7 @@
 
 import os
 
-from sqlalchemy import engine_from_config, pool, text
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import MetaData, engine_from_config, pool, text
 
 from alembic import context
 
@@ -22,14 +21,12 @@ def _resolve_url_and_schema(default_schema: str) -> tuple[str, str]:
     return url, schema
 
 
-def run_offline(metadata: DeclarativeBase | None, default_schema: str) -> None:
+def run_offline(metadata: MetaData | None, default_schema: str) -> None:
     """Run migrations in 'offline' mode."""
     url, schema = _resolve_url_and_schema(default_schema)
     context.configure(
         url=url,
-        target_metadata=(
-            metadata.metadata if hasattr(metadata, "metadata") else metadata
-        ),
+        target_metadata=metadata,
         include_schemas=True,
         version_table_schema=schema,
         literal_binds=True,
@@ -40,7 +37,7 @@ def run_offline(metadata: DeclarativeBase | None, default_schema: str) -> None:
         context.run_migrations()
 
 
-def run_online(metadata: DeclarativeBase | None, default_schema: str) -> None:
+def run_online(metadata: MetaData | None, default_schema: str) -> None:
     """Run migrations in 'online' mode."""
     cfg = context.config.get_section(context.config.config_ini_section) or {}
     url, schema = _resolve_url_and_schema(default_schema)
@@ -57,9 +54,7 @@ def run_online(metadata: DeclarativeBase | None, default_schema: str) -> None:
 
         context.configure(
             connection=conn,
-            target_metadata=(
-                metadata.metadata if hasattr(metadata, "metadata") else metadata
-            ),
+            target_metadata=metadata,
             include_schemas=True,
             version_table_schema=schema,
             compare_type=True,

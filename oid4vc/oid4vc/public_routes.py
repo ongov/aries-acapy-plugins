@@ -867,7 +867,7 @@ async def register(app: web.Application, multitenant: bool, context: InjectionCo
         # TODO Add .well-known/did-configuration.json
         # Spec: https://identity.foundation/.well-known/resources/did-configuration/
         web.post(f"{subpath}/token", token),
-        web.post(f"{subpath}/nonce", get_nonce),
+        # web.post(f"{subpath}/nonce", get_nonce),
         web.post(f"{subpath}/credential", issue_cred),
         web.get(f"{subpath}/oid4vp/request/{{request_id}}", get_request),
         web.post(f"{subpath}/oid4vp/response/{{presentation_id}}", post_response),

@@ -7,11 +7,11 @@ from datetime import timedelta
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.security.utils import utcnow
 from tenant.config import settings
 from tenant.models import PreAuthCode
 from tenant.repositories.grant_repository import GrantRepository
 from tenant.repositories.subject_repository import SubjectRepository
-from tenant.utils.security import utcnow
 
 
 def new_code() -> str:

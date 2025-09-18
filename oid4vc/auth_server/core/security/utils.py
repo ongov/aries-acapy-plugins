@@ -8,7 +8,7 @@ from typing import Any
 
 from authlib.jose import JsonWebKey, jwt
 
-from core.json import safe_json_loads
+from core.utils.json import safe_json_loads
 from tenant.config import settings
 
 
@@ -51,6 +51,15 @@ def jwt_payload_unverified(jwt_str: str) -> dict[str, Any]:
     try:
         _, payload, _ = jwt_str.split(".", 2)
         return {} if not payload else safe_json_loads(b64url_decode(payload))
+    except Exception:
+        return {}
+
+
+def jwt_header_unverified(jwt_str: str) -> dict[str, Any]:
+    """Return unverified JWT header as dict (no signature check)."""
+    try:
+        header, _, _ = jwt_str.split(".", 2)
+        return {} if not header else safe_json_loads(b64url_decode(header))
     except Exception:
         return {}
 

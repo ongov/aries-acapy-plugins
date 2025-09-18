@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import ORJSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.models import Client as AuthClient
 from tenant.deps import get_db_session
 from tenant.schemas.grant import PreAuthGrantIn, PreAuthGrantOut
-from tenant.services.grant_service import create_pre_authorized_code
-from tenant.models import Client as AuthClient
 from tenant.security.client_auth import client_auth
+from tenant.services.grant_service import create_pre_authorized_code
 
 router = APIRouter(prefix="/tenants/{uid}")
 

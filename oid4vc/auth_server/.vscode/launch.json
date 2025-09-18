@@ -15,7 +15,7 @@
                 "--host",
                 "0.0.0.0",
                 "--port",
-                "8001",
+                "9000",
                 "--reload",
                 "--proxy-headers",
                 "--forwarded-allow-ips=*"
@@ -33,7 +33,7 @@
                 "--host",
                 "0.0.0.0",
                 "--port",
-                "8000",
+                "9001",
                 "--reload",
                 "--proxy-headers",
                 "--forwarded-allow-ips=*"

@@ -9,8 +9,8 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from core.observability import current_request_id
-from core.retry import with_retries
+from core.observability.observability import current_request_id
+from core.utils.retry import with_retries
 from tenant.config import settings
 
 # In-memory cache: uid -> (timestamp, ctx)

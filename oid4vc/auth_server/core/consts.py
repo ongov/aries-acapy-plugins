@@ -18,13 +18,13 @@ class OAuth2GrantType:
 class ClientAuthMethod:
     """OAuth2 client authentication methods."""
 
-    PRIVATE_KEY_JWT = "private_key_jwt"
     CLIENT_SECRET_BASIC = "client_secret_basic"
-    SHARED_BEARER = "shared_bearer"
+    PRIVATE_KEY_JWT = "private_key_jwt"
+    SHARED_KEY_JWT = "shared_bearer"
 
 
 CLIENT_AUTH_METHODS: tuple[str, ...] = (
-    ClientAuthMethod.PRIVATE_KEY_JWT,
     ClientAuthMethod.CLIENT_SECRET_BASIC,
-    ClientAuthMethod.SHARED_BEARER,
+    ClientAuthMethod.PRIVATE_KEY_JWT,
+    ClientAuthMethod.SHARED_KEY_JWT,
 )
