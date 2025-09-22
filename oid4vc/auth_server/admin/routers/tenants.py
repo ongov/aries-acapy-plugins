@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.deps import get_db_session
+from admin.schemas.client import ClientIn, ClientOut
 from admin.schemas.tenant import KeyGenIn, KeyStatusIn, TenantIn, TenantOut
-from admin.schemas.client import ClientCreateIn, ClientCreateOut
 from admin.security.bearer import require_admin_auth
+from admin.services.internal_service import get_tenant_jwks
 from admin.services.tenant_service import TenantService
 
 router = APIRouter(dependencies=[Depends(require_admin_auth)])
@@ -58,6 +59,17 @@ async def delete_tenant(uid: str, db: AsyncSession = Depends(get_db_session)):
     return {"status": "deleted", "uid": uid}
 
 
+#
+# Tenant Key Management
+#
+
+
+@router.get("/tenants/{uid}/keys")
+async def get_tenant_keys(uid: str, db: AsyncSession = Depends(get_db_session)):
+    """Get jwks for a tenant via service."""
+    return await get_tenant_jwks(db, uid)
+
+
 @router.post("/tenants/{uid}/keys")
 async def generate_tenant_keypair(
     uid: str, body: KeyGenIn, db: AsyncSession = Depends(get_db_session)
@@ -79,10 +91,58 @@ async def update_key_status(
     return await svc.update_key_status(uid, kid, body.status)
 
 
-@router.post("/tenants/{uid}/clients", response_model=ClientCreateOut)
-async def onboard_client(
-    uid: str, body: ClientCreateIn, db: AsyncSession = Depends(get_db_session)
-):
-    """Register a client in the tenant DB."""
+#
+# Tenant Client Management
+#
+
+
+@router.get("/tenants/{uid}/clients", response_model=list[ClientOut])
+async def list_clients(uid: str, db: AsyncSession = Depends(get_db_session)):
+    """List clients via repository."""
     svc = TenantService(db)
-    return await svc.onboard_client(uid, body)
+    rows = await svc.list_clients(uid)
+    return [ClientOut.model_validate(r) for r in rows]
+
+
+@router.get("/tenants/{uid}/clients/{client_id}")
+async def get_client(
+    uid: str, client_id: str, db: AsyncSession = Depends(get_db_session)
+):
+    """Get a specific client via repository."""
+    svc = TenantService(db)
+    row = await svc.get_client(uid, client_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="client_not_found")
+    return ClientOut.model_validate(row)
+
+
+@router.post("/tenants/{uid}/clients", response_model=ClientOut, status_code=201)
+async def create_client(
+    uid: str, body: ClientIn, db: AsyncSession = Depends(get_db_session)
+):
+    """Create a new client via repository."""
+    svc = TenantService(db)
+    row = await svc.create_client(uid, body)
+    return ClientOut.model_validate(row)
+
+
+@router.patch("/tenants/{uid}/clients/{client_id}")
+async def update_client(
+    uid: str, client_id: str, body: ClientIn, db: AsyncSession = Depends(get_db_session)
+):
+    """Update a client via repository."""
+    svc = TenantService(db)
+    await svc.update_client(uid, client_id, body)
+    return {"status": "updated", "client_id": client_id}
+
+
+@router.delete("/tenants/{uid}/clients/{client_id}")
+async def delete_client(
+    uid: str, client_id: str, db: AsyncSession = Depends(get_db_session)
+):
+    """Delete a client via repository."""
+    svc = TenantService(db)
+    deleted = await svc.delete_client(uid, client_id)
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="client_not_found")
+    return {"status": "deleted", "client_id": client_id}

@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     APP_VERSION: str = "0.1.0"
     OPENAPI_URL: str = ""
 
+    OAUTH_ISSUER: str = ""
+    OAUTH_CLIENT_ID: str = ""
+    OAUTH_JWKS_URL: str = ""
+    MANAGE_AUTH_TOKEN: str = "manage_auth_token"
+
     DB_DRIVER_ASYNC: str = "postgresql+asyncpg"
     DB_DRIVER_SYNC: str = "postgresql+psycopg"
     DB_HOST: str = "localhost"

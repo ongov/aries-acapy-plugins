@@ -4,19 +4,17 @@ from fastapi import APIRouter, Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from admin.deps import get_db_session
-from admin.security.bearer import require_service_bearer
 from admin.schemas.internal import (
     JwtSignRequest,
     JwtSignResponse,
     TenantDbResponse,
     TenantJwksResponse,
 )
+from admin.security.bearer import require_interal_auth
 from admin.services.internal_service import get_tenant_db, get_tenant_jwks
 from admin.services.signing_service import sign_tenant_jwt
 
-router = APIRouter(
-    prefix="/tenants/{uid}", dependencies=[Depends(require_service_bearer)]
-)
+router = APIRouter(prefix="/tenants/{uid}", dependencies=[Depends(require_interal_auth)])
 
 
 @router.get("/db", response_model=TenantDbResponse)

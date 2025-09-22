@@ -1,7 +1,7 @@
 """Client authentication for issuer APIs."""
 
 import json
-from typing import Any
+from typing import Any, Mapping
 
 import httpx
 from authlib.jose import JsonWebKey, jwt
@@ -67,6 +67,79 @@ def _validate_jwt_claims(decoded: dict[str, Any], request: Request):
         raise HTTPException(status_code=401, detail="invalid_audience")
 
 
+def _decode_and_validate_jwt(
+    token: str,
+    key_material: Any,
+    request: Request,
+    expected_alg: str | None = None,
+) -> Mapping[str, Any]:
+    """Decode, validate, and return JWT claims using provided key material."""
+
+    if expected_alg:
+        _validate_jwt_alg(token, expected_alg)
+
+    try:
+        claims = jwt.decode(token, key_material)  # type: ignore[arg-type]
+        claims.validate(now=None, leeway=30)
+        _validate_jwt_claims(claims, request)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="invalid_client_assertion") from exc
+
+    if not isinstance(claims, Mapping):
+        raise HTTPException(status_code=401, detail="invalid_client_assertion")
+
+    return claims
+
+
+async def _authenticate_private_key_jwt(
+    client: AuthClient, token: str, request: Request
+) -> Mapping[str, Any]:
+    """Validate private_key_jwt assertions."""
+
+    jwks = await _load_jwks(client)
+    if not isinstance(jwks, dict) or not jwks.get("keys"):
+        raise HTTPException(status_code=401, detail="invalid_client_keys")
+
+    keys = JsonWebKey.import_key_set(jwks)
+    return _decode_and_validate_jwt(
+        token,
+        keys,
+        request,
+        expected_alg=client.client_auth_signing_alg,
+    )
+
+
+async def _authenticate_shared_key_jwt(
+    client: AuthClient, token: str, request: Request, presented_client_id: str
+) -> Mapping[str, Any]:
+    """Validate shared_key_jwt assertions signed with a shared secret."""
+
+    secret = client.client_secret or ""
+    if not secret:
+        raise HTTPException(status_code=401, detail="unauthorized_client")
+
+    claims = _decode_and_validate_jwt(
+        token,
+        secret,
+        request,
+        expected_alg=client.client_auth_signing_alg,
+    )
+
+    if str(claims.get("sub")) != str(presented_client_id):
+        raise HTTPException(status_code=401, detail="invalid_client")
+
+    return claims
+
+
+def _authenticate_client_secret_basic(client: AuthClient, token: str) -> None:
+    """Validate client_secret_basic credentials."""
+
+    secret_hash = client.client_secret
+    if secret_hash and token and verify_secret_pbkdf2(token, secret_hash):
+        return
+    raise HTTPException(status_code=401, detail="invalid_client")
+
+
 async def base_client_auth(
     db: AsyncSession,
     request: Request,
@@ -124,44 +197,18 @@ async def base_client_auth(
         raise HTTPException(status_code=401, detail="unauthorized_client")
 
     if allowed == CLIENT_AUTH_METHOD.PRIVATE_KEY_JWT:
-        if client.client_auth_signing_alg:
-            _validate_jwt_alg(token, client.client_auth_signing_alg)
-        jwks = await _load_jwks(client)
-        if not isinstance(jwks, dict) or not jwks.get("keys"):
-            raise HTTPException(status_code=401, detail="invalid_client_keys")
-        keys = JsonWebKey.import_key_set(jwks)
-        try:
-            decoded = jwt.decode(token, keys)  # type: ignore[arg-type]
-            decoded.validate(now=None, leeway=30)
-            _validate_jwt_claims(decoded, request)
-        except Exception:
-            raise HTTPException(status_code=401, detail="invalid_client_assertion")
+        await _authenticate_private_key_jwt(client, token, request)
         request.state.client_id = str(client.client_id)
         return client
 
     if allowed == CLIENT_AUTH_METHOD.SHARED_KEY_JWT:
-        secret = client.client_secret or ""
-        if not secret:
-            raise HTTPException(status_code=401, detail="unauthorized_client")
-        if client.client_auth_signing_alg:
-            _validate_jwt_alg(token, client.client_auth_signing_alg)
-        try:
-            decoded = jwt.decode(token, secret)  # type: ignore[arg-type]
-            decoded.validate(now=None, leeway=30)
-            _validate_jwt_claims(decoded, request)
-        except Exception:
-            raise HTTPException(status_code=401, detail="invalid_client_assertion")
-        claims = decoded if isinstance(decoded, dict) else {}
-        if str(claims.get("sub")) != str(client_id):
-            raise HTTPException(status_code=401, detail="invalid_client")
+        await _authenticate_shared_key_jwt(client, token, request, str(client_id))
         request.state.client_id = str(client.client_id)
         return client
 
     if allowed == CLIENT_AUTH_METHOD.CLIENT_SECRET_BASIC:
-        secret_hash = client.client_secret
-        if secret_hash and token and verify_secret_pbkdf2(token, secret_hash):
-            request.state.client_id = str(client.client_id)
-            return client
-        raise HTTPException(status_code=401, detail="invalid_client")
+        _authenticate_client_secret_basic(client, token)
+        request.state.client_id = str(client.client_id)
+        return client
 
     raise HTTPException(status_code=401, detail="unauthorized_client")
