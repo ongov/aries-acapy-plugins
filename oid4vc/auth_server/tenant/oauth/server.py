@@ -41,7 +41,11 @@ def get_authorization_server() -> AuthorizationServer:
             if flow == OAuth2Flow.PRE_AUTH_CODE:
                 code = ctx.get("code") or ""
                 user_pin = ctx.get("user_pin")
-                access_token, refresh_token = await TokenService.issue_by_pre_auth_code(
+                (
+                    access_token,
+                    refresh_token,
+                    response_meta,
+                ) = await TokenService.issue_by_pre_auth_code(
                     db=db,
                     uid=uid,
                     code=code,
@@ -60,6 +64,14 @@ def get_authorization_server() -> AuthorizationServer:
                         ),
                     }
                 )
+                if response_meta.get("authorization_details"):
+                    token["authorization_details"] = response_meta[
+                        "authorization_details"
+                    ]
+                if response_meta.get("c_nonce"):
+                    token["c_nonce"] = response_meta["c_nonce"]
+                if response_meta.get("c_nonce_expires_in"):
+                    token["c_nonce_expires_in"] = int(response_meta["c_nonce_expires_in"])
                 return
 
             if flow == OAuth2Flow.REFRESH_TOKEN:
@@ -67,6 +79,7 @@ def get_authorization_server() -> AuthorizationServer:
                 (
                     new_access,
                     new_refresh_token,
+                    response_meta,
                 ) = await TokenService.rotate_by_refresh_token(
                     db=db,
                     uid=uid,
@@ -83,9 +96,20 @@ def get_authorization_server() -> AuthorizationServer:
                         ),
                     }
                 )
+                if response_meta.get("authorization_details"):
+                    token["authorization_details"] = response_meta[
+                        "authorization_details"
+                    ]
+                if response_meta.get("c_nonce"):
+                    token["c_nonce"] = response_meta["c_nonce"]
+                if response_meta.get("c_nonce_expires_in"):
+                    token["c_nonce_expires_in"] = int(response_meta["c_nonce_expires_in"])
                 return
         except FastAPIHTTPException as e:  # map service errors to OAuth errors
             if e.status_code == 400:
+                detail = getattr(e, "detail", None)
+                if detail == "invalid_grant":
+                    raise InvalidGrantError(description="invalid_grant")
                 raise InvalidRequestError(description="invalid_request")
             if e.status_code == 401:
                 raise InvalidGrantError(description="invalid_grant")

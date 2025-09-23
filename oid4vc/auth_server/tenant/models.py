@@ -1,6 +1,7 @@
 """Models for the tenant database."""
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -60,7 +61,9 @@ class PreAuthCode(Base):
     user_pin_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    authorization_details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    authorization_details: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB, nullable=True
+    )
     expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     issued_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

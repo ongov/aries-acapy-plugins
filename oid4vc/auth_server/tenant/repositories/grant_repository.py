@@ -1,5 +1,7 @@
 """Pre-authorized grant repository."""
 
+from typing import Any
+
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,7 +52,7 @@ class GrantRepository:
         code: str,
         user_pin: str | None,
         user_pin_required: bool,
-        authorization_details: list | None,
+        authorization_details: list[dict[str, Any]] | None,
         issued_at,
         expires_at,
     ) -> PreAuthCode:

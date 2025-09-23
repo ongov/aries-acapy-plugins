@@ -20,6 +20,15 @@ from tenant.repositories.refresh_token_repository import RefreshTokenRepository
 from tenant.services.signing_service import remote_sign_jwt
 
 
+def _coerce_authorization_details(value: Any) -> list[dict[str, Any]]:
+    """Return authorization_details as a list of dicts, filtering invalid entries."""
+    if isinstance(value, dict):
+        return [value]
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    return []
+
+
 class TokenService:
     """Issue/rotate tokens via remote signer, using tenant DB only."""
 
@@ -42,17 +51,17 @@ class TokenService:
         pac = await grant_repo.get_by_code(code)
         if pac is None:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_request"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant"
             )
         if pac.user_pin_required and (not user_pin or user_pin != (pac.user_pin or "")):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_request"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant"
             )
         # Atomically consume the PAC to prevent race/double-spend
         consumed = await grant_repo.consume_valid(pac.id, now)
         if not consumed:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_request"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="invalid_grant"
             )
 
         if not pac.subject or not pac.subject.uid:
@@ -64,17 +73,18 @@ class TokenService:
         claims = {
             "iss": issuer,
             "sub": pac.subject.uid,
-            "realm": realm,
             "iat": int(now.timestamp()),
             "exp": int(access_exp.timestamp()),
         }
-        if pac.authorization_details:
-            claims["authorization_details"] = pac.authorization_details
+        response_meta: dict[str, Any] = {}
+        auth_details = _coerce_authorization_details(pac.authorization_details)
+        if auth_details:
+            response_meta["authorization_details"] = auth_details
         if settings.INCLUDE_NONCE:
             c_nonce = secrets.token_urlsafe(settings.NONCE_BYTES)
             c_nonce_expires_in = settings.ACCESS_TOKEN_TTL
-            claims["c_nonce"] = c_nonce
-            claims["c_nonce_expires_in"] = c_nonce_expires_in
+            response_meta["c_nonce"] = c_nonce
+            response_meta["c_nonce_expires_in"] = c_nonce_expires_in
 
         sign_res = await remote_sign_jwt(
             uid=uid,
@@ -82,11 +92,7 @@ class TokenService:
         )
 
         token_meta: dict[str, Any] = {"iss": issuer, "realm": realm}
-        if settings.INCLUDE_NONCE:
-            token_meta["c_nonce"] = c_nonce
-            token_meta["c_nonce_expires_in"] = str(c_nonce_expires_in)
-        if pac.authorization_details:
-            token_meta["authorization_details"] = pac.authorization_details
+        token_meta.update(response_meta)
         access_token = await access_repo.create(
             subject_id=pac.subject_id,
             token=sign_res["jwt"],
@@ -105,7 +111,7 @@ class TokenService:
             token_metadata={"realm": realm},
         )
         await db.commit()
-        return access_token, refresh_token
+        return access_token, refresh_token, response_meta
 
     @staticmethod
     async def rotate_by_refresh_token(
@@ -138,24 +144,24 @@ class TokenService:
             )
         prev_meta = prev_access.token_metadata or {}
         prev_authz = (
-            prev_meta.get("authorization_details")
+            _coerce_authorization_details(prev_meta.get("authorization_details"))
             if isinstance(prev_meta, dict)
-            else None
+            else []
         )
         claims = {
             "iss": issuer,
             "sub": prev_access.subject.uid,
-            "realm": realm,
             "iat": int(now.timestamp()),
             "exp": int(access_exp.timestamp()),
         }
+        response_meta: dict[str, Any] = {}
         if prev_authz:
-            claims["authorization_details"] = prev_authz
+            response_meta["authorization_details"] = prev_authz
         if settings.INCLUDE_NONCE:
             c_nonce = secrets.token_urlsafe(settings.NONCE_BYTES)
             c_nonce_expires_in = settings.ACCESS_TOKEN_TTL
-            claims["c_nonce"] = c_nonce
-            claims["c_nonce_expires_in"] = c_nonce_expires_in
+            response_meta["c_nonce"] = c_nonce
+            response_meta["c_nonce_expires_in"] = c_nonce_expires_in
 
         sign_res = await remote_sign_jwt(
             uid=uid,
@@ -163,11 +169,7 @@ class TokenService:
         )
 
         token_meta = {"iss": issuer, "realm": realm}
-        if settings.INCLUDE_NONCE:
-            token_meta["c_nonce"] = c_nonce
-            token_meta["c_nonce_expires_in"] = str(c_nonce_expires_in)
-        if prev_authz:
-            token_meta["authorization_details"] = prev_authz
+        token_meta.update(response_meta)
         new_access_token = await access_repo.create(
             subject_id=subject_id,
             token=sign_res["jwt"],
@@ -186,4 +188,4 @@ class TokenService:
             token_metadata={"realm": realm},
         )
         await db.commit()
-        return new_access_token, refresh_token
+        return new_access_token, refresh_token, response_meta

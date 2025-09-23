@@ -74,7 +74,7 @@ async def health_check():
     try:
         async with db_manager.session() as session:
             await session.execute(text("SELECT 1"))
-        return {"status": "ok"}
+        return ORJSONResponse(content={"status": "ok"}, status_code=status.HTTP_200_OK)
     except Exception as ex:
         error_message = f"database_unavailable: {ex}"
         logger.error(f"Health check failed: {error_message}")

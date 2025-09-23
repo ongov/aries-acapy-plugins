@@ -65,7 +65,7 @@ class TenantService:
                     # Create DB without OWNER and grant needed privileges to tenant role.
                     cur.execute(
                         sql.SQL(
-                            "CREATE DATABASE {} " "ENCODING 'UTF8' TEMPLATE template0"
+                            "CREATE DATABASE {} ENCODING 'UTF8' TEMPLATE template0"
                         ).format(
                             sql.Identifier(db_name),
                         )

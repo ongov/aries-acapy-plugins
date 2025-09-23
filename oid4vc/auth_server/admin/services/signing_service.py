@@ -65,8 +65,8 @@ async def sign_tenant_jwt(
         raise HTTPException(status_code=400, detail="exp_exceeds_key_validity")
 
     # Sign
-    pem = decrypt_private_pem(key.private_pem_enc)
-    jwk_key = JsonWebKey.import_key(pem)
+    pem = decrypt_private_pem(key.private_pem_enc)  # type: ignore
+    jwk_key = JsonWebKey.import_key(pem)  # type: ignore
     header = {"alg": alg, "kid": key.kid, "typ": "JWT"}
     token = jwt.encode(header, claims, jwk_key).decode()
 
