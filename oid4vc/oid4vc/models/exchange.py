@@ -27,7 +27,18 @@ class OID4VCIExchangeRecord(BaseExchangeRecord):
     STATE_OFFER_CREATED = "offer"
     STATE_ISSUED = "issued"
     STATE_FAILED = "failed"
-    STATES = (STATE_CREATED, STATE_OFFER_CREATED, STATE_ISSUED, STATE_FAILED)
+    STATE_CREDENTIAL_ACCEPTED = "credential_accepted"
+    STATE_CREDENTIAL_FAILURE = "credential_failure"
+    STATE_CREDENTIAL_DELETED = "credential_deleted"
+    STATES = (
+        STATE_CREATED,
+        STATE_OFFER_CREATED,
+        STATE_ISSUED,
+        STATE_FAILED,
+        STATE_CREDENTIAL_ACCEPTED,
+        STATE_CREDENTIAL_FAILURE,
+        STATE_CREDENTIAL_DELETED,
+    )
     TAG_NAMES = {"state", "supported_cred_id", "notification_id", "code"}
 
     def __init__(

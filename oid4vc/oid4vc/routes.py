@@ -241,6 +241,7 @@ async def exchange_create(request: web.Request):
     except ValueError as err:
         raise web.HTTPBadRequest(reason=str(err)) from err
 
+    notification_id = secrets.token_urlsafe(CODE_BYTES)
     record = OID4VCIExchangeRecord(
         supported_cred_id=supported_cred_id,
         credential_subject=credential_subject,
@@ -248,6 +249,7 @@ async def exchange_create(request: web.Request):
         state=OID4VCIExchangeRecord.STATE_CREATED,
         verification_method=verification_method,
         issuer_id=issuer_id,
+        notification_id=notification_id,
     )
     LOGGER.debug(f"Created exchange record: {record}")
 

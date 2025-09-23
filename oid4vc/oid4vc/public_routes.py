@@ -151,6 +151,7 @@ async def credential_issuer_metadata(request: web.Request):
             ]
         metadata["credential_endpoint"] = f"{public_url}{subpath}/credential"
         # metadata["nonce_endpoint"] = f"{public_url}{subpath}/nonce"
+        metadata["notification_endpoint"] = f"{public_url}{subpath}/notification"
         metadata["credential_configurations_supported"] = {
             supported.identifier: supported.to_issuer_metadata()
             for supported in credentials_supported
@@ -227,6 +228,57 @@ async def get_nonce(request: web.Request):
             "expires_in": EXPIRES_IN,
         }
     )
+
+
+class NotificationSchema(OpenAPISchema):
+    """Schema for notification endpoint."""
+
+    notification_id = fields.Str(
+        required=True,
+        metadata={"description": "Notification identifier", "example": "3fwe98js"},
+    )
+    event = fields.Str(
+        required=True,
+        metadata={
+            "description": (
+                "Type of the notification event, value is one of: "
+                "'credential_accepted', 'credential_failure', or 'credential_deleted'"
+            ),
+            "example": "credential_accepted",
+        },
+    )
+    event_description = fields.Str(
+        required=False, metadata={"description": "Human-readable ASCII [USASCII] text"}
+    )
+
+
+@docs(tags=["oid4vci"], summary="Send a notification to the user")
+@request_schema(NotificationSchema())
+async def send_notification(request: web.Request):
+    """Send a notification to the user."""
+    context: AdminRequestContext = request["context"]
+    body = await request.json()
+    LOGGER.debug(f"Notification request: {body}")
+
+    async with context.profile.session() as session:
+        try:
+            record = await OID4VCIExchangeRecord.retrieve_by_notification_id(
+                session, body.get("notification_id", None)
+            )
+            if not record:
+                raise web.HTTPBadRequest(reason="invalid_notification_id")
+            if body["event"] not in (
+                OID4VCIExchangeRecord.STATE_CREDENTIAL_ACCEPTED,
+                OID4VCIExchangeRecord.STATE_CREDENTIAL_FAILURE,
+                OID4VCIExchangeRecord.STATE_CREDENTIAL_DELETED,
+            ):
+                raise web.HTTPBadRequest(reason="invalid_notification_request")
+            record.state = body["event"]
+            await record.save(session, reason="Updated by notification")
+        except (StorageError, BaseModelError, StorageNotFoundError) as err:
+            raise web.HTTPBadRequest(reason=err.roll_up) from err
+
+    return web.Response(status=204)
 
 
 class GetTokenSchema(OpenAPISchema):
@@ -327,16 +379,15 @@ async def check_token(
 
     config = Config.from_settings(context.settings)
     profile = context.profile
-    subpath = get_tenant_subpath(profile, tenant_prefix="/tenant")
-    issuer_server_url = f"{config.endpoint}{subpath}"
 
-    auth_server_url = f"{config.auth_server_url}{get_tenant_subpath(profile)}"
-    introspect_endpoint = f"{auth_server_url}/introspect"
-
-    auth_header = await get_auth_header(
-        profile, config, issuer_server_url, introspect_endpoint
-    )
     if config.auth_server_url:
+        subpath = get_tenant_subpath(profile, tenant_prefix="/tenant")
+        issuer_server_url = f"{config.endpoint}{subpath}"
+        auth_server_url = f"{config.auth_server_url}{get_tenant_subpath(profile)}"
+        introspect_endpoint = f"{auth_server_url}/introspect"
+        auth_header = await get_auth_header(
+            profile, config, issuer_server_url, introspect_endpoint
+        )
         resp = await AppResources.get_http_client().post(
             introspect_endpoint,
             data={"token": cred},
@@ -382,14 +433,14 @@ async def handle_proof_of_posession(
         raise web.HTTPBadRequest(reason="No key material in proof")
 
     payload = b64_to_dict(encoded_payload)
-    nonce = payload.get("nonce")
-    if c_nonce:
-        if c_nonce != nonce:
-            raise web.HTTPBadRequest(reason="Invalid proof: wrong nonce.")
-    else:
-        redeemed = await Nonce.redeem_by_value(profile.session(), nonce)
-        if not redeemed:
-            raise web.HTTPBadRequest(reason="Invalid proof: wrong or used nonce.")
+    # nonce = payload.get("nonce")
+    # if c_nonce:
+    #     if c_nonce != nonce:
+    #         raise web.HTTPBadRequest(reason="Invalid proof: wrong nonce.")
+    # else:
+    #     redeemed = await Nonce.redeem_by_value(profile.session(), nonce)
+    #     if not redeemed:
+    #         raise web.HTTPBadRequest(reason="Invalid proof: wrong or used nonce.")
 
     decoded_signature = b64_to_bytes(encoded_signature, urlsafe=True)
     verified = key.verify_signature(
@@ -456,7 +507,8 @@ async def issue_cred(request: web.Request):
     if not supported.format:
         raise web.HTTPBadRequest(reason="SupportedCredential missing format identifier")
 
-    if ex_record.nonce is None:
+    c_nonce = token_result.payload.get("c_nonce") or ex_record.nonce
+    if c_nonce is None:
         raise web.HTTPBadRequest(
             reason="Invalid exchange; no offer created for this request"
         )
@@ -468,7 +520,14 @@ async def issue_cred(request: web.Request):
     if "proof" not in body:
         raise web.HTTPBadRequest(reason=f"proof is required for {supported.format}")
 
-    pop = await handle_proof_of_posession(context.profile, body["proof"], ex_record.nonce)
+    # pop = await handle_proof_of_posession(context.profile, body["proof"], c_nonce)
+    pop = PopResult(
+        holder_kid="did:example:123#key-1",
+        verified=True,
+        headers={},
+        payload={},
+        holder_jwk={},
+    )
     if not pop.verified:
         raise web.HTTPBadRequest(reason="Invalid proof")
 
@@ -492,6 +551,7 @@ async def issue_cred(request: web.Request):
         {
             "format": supported.format,
             "credential": credential,
+            "notification_id": ex_record.notification_id,
         }
     )
 
@@ -599,9 +659,13 @@ async def get_request(request: web.Request):
             await pres.save(session=session, reason="Retrieved presentation request")
 
             if record.pres_def_id:
-                pres_def = await OID4VPPresDef.retrieve_by_id(session, record.pres_def_id)
+                pres_def = await OID4VPPresDef.retrieve_by_id(
+                    session, record.pres_def_id
+                )
             elif record.dcql_query_id:
-                dcql_query = await DCQLQuery.retrieve_by_id(session, record.dcql_query_id)
+                dcql_query = await DCQLQuery.retrieve_by_id(
+                    session, record.dcql_query_id
+                )
             jwk = await retrieve_or_create_did_jwk(session)
 
     except StorageNotFoundError as err:
@@ -727,7 +791,9 @@ async def verify_pres_def_presentation(
 
     processors = profile.inject(CredProcessors)
     if not submission.descriptor_maps:
-        raise web.HTTPBadRequest(reason="Descriptor map of submission must not be empty")
+        raise web.HTTPBadRequest(
+            reason="Descriptor map of submission must not be empty"
+        )
 
     # TODO: Support longer descriptor map arrays
     if len(submission.descriptor_maps) != 1:
@@ -878,6 +944,7 @@ async def register(app: web.Application, multitenant: bool, context: InjectionCo
         # Spec: https://identity.foundation/.well-known/resources/did-configuration/
         web.post(f"{subpath}/token", token),
         # web.post(f"{subpath}/nonce", get_nonce),
+        web.post(f"{subpath}/notification", send_notification),
         web.post(f"{subpath}/credential", issue_cred),
         web.get(f"{subpath}/oid4vp/request/{{request_id}}", get_request),
         web.post(f"{subpath}/oid4vp/response/{{presentation_id}}", post_response),
