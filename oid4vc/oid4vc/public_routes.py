@@ -456,10 +456,10 @@ async def issue_cred(request: web.Request):
     if not supported.format:
         raise web.HTTPBadRequest(reason="SupportedCredential missing format identifier")
 
-    if ex_record.nonce is None:
-        raise web.HTTPBadRequest(
-            reason="Invalid exchange; no offer created for this request"
-        )
+    # if ex_record.nonce is None:
+    #     raise web.HTTPBadRequest(
+    #         reason="Invalid exchange; no offer created for this request"
+    #     )
 
     if supported.format_data is None:
         LOGGER.error(f"No format_data for supported credential {supported.format}.")

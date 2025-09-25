@@ -71,7 +71,7 @@ services:
     ports:
       - "4040:4040"
     environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+      - NGROK_AUTHTOKEN=2y1ZLxE8dUPjmQPfr3b5V7oN8yb_3AjnCjT6L4RwdgzvW3fhH
     command: ["http", "issuer:8082"]
     healthcheck:
       test: /bin/bash -c "</dev/tcp/ngrok/4040"

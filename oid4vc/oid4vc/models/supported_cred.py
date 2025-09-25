@@ -106,6 +106,13 @@ class SupportedCredential(BaseRecord):
         issuer_metadata["credential_definition"] = (
             self.format_data if self.format_data else {}
         )
+        issuer_metadata["proof_types_supported"] = {
+            "jwt" : {
+                    "proof_signing_alg_values_supported":[ 
+                        "EdDSA"
+                        ]
+                    }
+            }
         return issuer_metadata
 
 
