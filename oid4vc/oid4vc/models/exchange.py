@@ -27,17 +27,15 @@ class OID4VCIExchangeRecord(BaseExchangeRecord):
     STATE_OFFER_CREATED = "offer"
     STATE_ISSUED = "issued"
     STATE_FAILED = "failed"
-    STATE_CREDENTIAL_ACCEPTED = "credential_accepted"
-    STATE_CREDENTIAL_FAILURE = "credential_failure"
-    STATE_CREDENTIAL_DELETED = "credential_deleted"
+    STATE_ACCEPTED = "accepted"
+    STATE_DELETED = "deleted"
     STATES = (
         STATE_CREATED,
         STATE_OFFER_CREATED,
         STATE_ISSUED,
         STATE_FAILED,
-        STATE_CREDENTIAL_ACCEPTED,
-        STATE_CREDENTIAL_FAILURE,
-        STATE_CREDENTIAL_DELETED,
+        STATE_ACCEPTED,
+        STATE_DELETED,
     )
     TAG_NAMES = {"state", "supported_cred_id", "notification_id", "code"}
 
@@ -51,6 +49,7 @@ class OID4VCIExchangeRecord(BaseExchangeRecord):
         verification_method: str,
         issuer_id: str,
         notification_id: Optional[str] = None,
+        notification_event: Optional[dict] = None,
         nonce: Optional[str] = None,
         pin: Optional[str] = None,
         code: Optional[str] = None,
@@ -64,6 +63,7 @@ class OID4VCIExchangeRecord(BaseExchangeRecord):
         self.verification_method = verification_method
         self.issuer_id = issuer_id
         self.notification_id = notification_id
+        self.notification_event = notification_event
         self.nonce = nonce  # in offer
         self.pin = pin  # (when relevant)
         self.code = code
@@ -85,6 +85,7 @@ class OID4VCIExchangeRecord(BaseExchangeRecord):
                 "verification_method",
                 "issuer_id",
                 "notification_id",
+                "notification_event",
                 "nonce",
                 "pin",
                 "code",
@@ -153,6 +154,9 @@ class OID4VCIExchangeRecordSchema(BaseRecordSchema):
         },
     )
     notification_id = fields.Str(
+        required=False,
+    )
+    notification_event = fields.Dict(
         required=False,
     )
     nonce = fields.Str(

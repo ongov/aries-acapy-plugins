@@ -531,6 +531,10 @@ class SupportedCredCreateRequestSchema(OpenAPISchema):
     cryptographic_suites_supported = fields.List(
         fields.Str(), metadata={"example": ["ES256K"]}
     )
+    proof_types_supported = fields.Dict(
+        required=False,
+        metadata={"example": {"jwt": {"proof_signing_alg_values_supported": ["ES256"]}}},
+    )
     display = fields.List(
         fields.Dict(),
         metadata={
@@ -564,7 +568,7 @@ class SupportedCredCreateRequestSchema(OpenAPISchema):
                     "degree": {},
                     "gpa": {"display": [{"name": "GPA"}]},
                 },
-                "types": ["VerifiableCredential", "UniversityDegreeCredential"],
+                "type": ["VerifiableCredential", "UniversityDegreeCredential"],
             },
         },
     )
@@ -619,10 +623,10 @@ async def supported_credential_create(request: web.Request):
     body["identifier"] = body.pop("id")
 
     format_data: dict = body.get("format_data", {})
-    if format_data.get("vct") and format_data.get("types"):
+    if format_data.get("vct") and format_data.get("type"):
         raise web.HTTPBadRequest(
-            reason="Cannot have both `vct` and `types`. "
-            "`vct` is for SD JWT and `types` is for JWT VC"
+            reason="Cannot have both `vct` and `type`. "
+            "`vct` is for SD JWT and `type` is for JWT VC"
         )
 
     record = SupportedCredential(
@@ -660,6 +664,10 @@ class JwtSupportedCredCreateRequestSchema(OpenAPISchema):
     )
     cryptographic_suites_supported = fields.List(
         fields.Str(), metadata={"example": ["ES256K"]}
+    )
+    proof_types_supported = fields.Dict(
+        required=False,
+        metadata={"example": {"jwt": {"proof_signing_alg_values_supported": ["ES256"]}}},
     )
     display = fields.List(
         fields.Dict(),
@@ -746,7 +754,7 @@ async def supported_credential_create_jwt(request: web.Request):
     LOGGER.info(f"body: {body}")
     body["identifier"] = body.pop("id")
     format_data = {}
-    format_data["types"] = body.pop("type")
+    format_data["type"] = body.pop("type")
     format_data["credentialSubject"] = body.pop("credentialSubject", None)
     format_data["context"] = body.pop("@context")
     format_data["order"] = body.pop("order", None)
@@ -754,7 +762,7 @@ async def supported_credential_create_jwt(request: web.Request):
     vc_additional_data["@context"] = format_data["context"]
     # type vs types is deliberate; OID4VCI spec is inconsistent with VCDM
     # ~ in Draft 11, fixed in later drafts
-    vc_additional_data["type"] = format_data["types"]
+    vc_additional_data["type"] = format_data["type"]
 
     record = SupportedCredential(
         **body,
@@ -903,14 +911,14 @@ async def jwt_supported_cred_update_helper(
     format_data = {}
     vc_additional_data = {}
 
-    format_data["types"] = body.get("type")
+    format_data["type"] = body.get("type")
     format_data["credentialSubject"] = body.get("credentialSubject", None)
     format_data["context"] = body.get("@context")
     format_data["order"] = body.get("order", None)
     vc_additional_data["@context"] = format_data["context"]
     # type vs types is deliberate; OID4VCI spec is inconsistent with VCDM
     # ~ as of Draft 11, fixed in later drafts
-    vc_additional_data["type"] = format_data["types"]
+    vc_additional_data["type"] = format_data["type"]
 
     record.identifier = body["id"]
     record.format = body["format"]
@@ -920,6 +928,7 @@ async def jwt_supported_cred_update_helper(
     record.cryptographic_suites_supported = body.get(
         "cryptographic_suites_supported", None
     )
+    record.proof_types_supported = body.get("proof_types_supported", None)
     record.display = body.get("display", None)
     record.format_data = format_data
     record.vc_additional_data = vc_additional_data

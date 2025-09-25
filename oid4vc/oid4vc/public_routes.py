@@ -156,36 +156,10 @@ async def credential_issuer_metadata(request: web.Request):
             supported.identifier: supported.to_issuer_metadata()
             for supported in credentials_supported
         }
-        # Optional parameters from draft 13
-        optional_params = {
-            "authorization_servers": [],  # List[str]
-            "batch_credential_endpoint": None,  # str
-            "batch_credential_issuance": {
-                "batch_size": None  # int (REQUIRED if present)
-            },
-            "nonce_endpoint": None,  # str
-            "deferred_credential_endpoint": None,  # str
-            "notification_endpoint": None,  # str
-            "credential_response_encryption": {
-                "alg_values_supported": [],  # List[str] (REQUIRED if present)
-                "enc_values_supported": [],  # List[str] (REQUIRED if present)
-                "encryption_required": None,  # bool (REQUIRED if present)
-            },
-            "credential_identifiers_supported": None,  # bool
-            "signed_metadata": None,  # str (JWT)
-            "display": [
-                {
-                    "name": None,  # str (OPTIONAL)
-                    "locale": None,  # str (OPTIONAL)
-                    "logo": {
-                        "url": None,  # str (REQUIRED if logo present)
-                        "alt_text": None,  # str (OPTIONAL)
-                    },
-                }
-            ],
-            "logo_uri": None,  # str
-            "policy_uri": None,  # str
-            "tos_uri": None,  # str
+        metadata["credential_configurations_supported"] = {
+            "OntarioTestPhotoCard": metadata["credential_configurations_supported"][
+                "OntarioTestPhotoCard"
+            ]
         }
 
     LOGGER.debug("METADATA: %s", metadata)
@@ -254,11 +228,14 @@ class NotificationSchema(OpenAPISchema):
 
 @docs(tags=["oid4vci"], summary="Send a notification to the user")
 @request_schema(NotificationSchema())
-async def send_notification(request: web.Request):
+async def receive_notification(request: web.Request):
     """Send a notification to the user."""
-    context: AdminRequestContext = request["context"]
     body = await request.json()
     LOGGER.debug(f"Notification request: {body}")
+
+    context: AdminRequestContext = request["context"]
+    if not await check_token(context, request.headers.get("Authorization")):
+        raise web.HTTPUnauthorized(reason="invalid_token")
 
     async with context.profile.session() as session:
         try:
@@ -267,13 +244,18 @@ async def send_notification(request: web.Request):
             )
             if not record:
                 raise web.HTTPBadRequest(reason="invalid_notification_id")
-            if body["event"] not in (
-                OID4VCIExchangeRecord.STATE_CREDENTIAL_ACCEPTED,
-                OID4VCIExchangeRecord.STATE_CREDENTIAL_FAILURE,
-                OID4VCIExchangeRecord.STATE_CREDENTIAL_DELETED,
-            ):
+            event = body.get("event", None)
+            event_desc = body.get("event_description", None)
+            if event == "credential_accepted":
+                record.state = OID4VCIExchangeRecord.STATE_ACCEPTED
+            elif event == "credential_failure":
+                record.state = OID4VCIExchangeRecord.STATE_FAILED
+            elif event == "credential_deleted":
+                record.state = OID4VCIExchangeRecord.STATE_DELETED
+            else:
                 raise web.HTTPBadRequest(reason="invalid_notification_request")
             record.state = body["event"]
+            record.notification_event = {"event": event, "description": event_desc}
             await record.save(session, reason="Updated by notification")
         except (StorageError, BaseModelError, StorageNotFoundError) as err:
             raise web.HTTPBadRequest(reason=err.roll_up) from err
@@ -298,11 +280,16 @@ class GetTokenSchema(OpenAPISchema):
 @form_schema(GetTokenSchema())
 async def token(request: web.Request):
     """Token endpoint to exchange pre_authorized codes for access tokens."""
-    config = Config.from_settings(request["context"].settings)
+    context = request["context"]
+    config = Config.from_settings(context.settings)
     if config.auth_server_url:
-        raise web.HTTPNotImplemented(
-            reason="Token endpoint is handled by external Authorization Server."
-        )
+        subpath = get_tenant_subpath(context.profile)
+        token_url = f"{config.auth_server_url}{subpath}/token"
+        # raise web.HTTPFound(location=token_url)
+        form = await request.post()
+        async with AppResources.get_http_client().post(token_url, data=form) as resp:
+            resp_data = await resp.json()
+            return web.json_response(resp_data, status=resp.status)
 
     context: AdminRequestContext = request["context"]
     form = await request.post()
@@ -370,12 +357,14 @@ async def check_token(
     bearer: Optional[str] = None,
 ) -> JWTVerifyResult:
     """Validate the OID4VCI token."""
-    if not bearer:
-        raise web.HTTPUnauthorized()  # no authentication
-
-    scheme, cred = bearer.split(" ")
+    if not bearer or not bearer.lower().startswith("bearer "):
+        raise web.HTTPUnauthorized()
+    try:
+        scheme, cred = bearer.split(" ", 1)
+    except ValueError:
+        raise web.HTTPUnauthorized()
     if scheme.lower() != "bearer":
-        raise web.HTTPUnauthorized()  # Invalid authentication credentials
+        raise web.HTTPUnauthorized()
 
     config = Config.from_settings(context.settings)
     profile = context.profile
@@ -404,7 +393,7 @@ async def check_token(
     if not result.verified:
         raise web.HTTPUnauthorized()  # Invalid credentials
 
-    if result.payload["exp"] < datetime.datetime.utcnow().timestamp():
+    if result.payload["exp"] < datetime_now().timestamp():
         raise web.HTTPUnauthorized()  # Token expired
 
     return result
@@ -433,14 +422,14 @@ async def handle_proof_of_posession(
         raise web.HTTPBadRequest(reason="No key material in proof")
 
     payload = b64_to_dict(encoded_payload)
-    # nonce = payload.get("nonce")
-    # if c_nonce:
-    #     if c_nonce != nonce:
-    #         raise web.HTTPBadRequest(reason="Invalid proof: wrong nonce.")
-    # else:
-    #     redeemed = await Nonce.redeem_by_value(profile.session(), nonce)
-    #     if not redeemed:
-    #         raise web.HTTPBadRequest(reason="Invalid proof: wrong or used nonce.")
+    nonce = payload.get("nonce")
+    if c_nonce:
+        if c_nonce != nonce:
+            raise web.HTTPBadRequest(reason="Invalid proof: wrong nonce.")
+    else:
+        redeemed = await Nonce.redeem_by_value(profile.session(), nonce)
+        if not redeemed:
+            raise web.HTTPBadRequest(reason="Invalid proof: wrong or used nonce.")
 
     decoded_signature = b64_to_bytes(encoded_signature, urlsafe=True)
     verified = key.verify_signature(
@@ -473,7 +462,7 @@ class IssueCredentialRequestSchema(OpenAPISchema):
         required=True,
         metadata={"description": "The client ID for the token request.", "example": ""},
     )
-    types = fields.List(
+    type = fields.List(
         fields.Str(),
         metadata={"description": ""},
     )
@@ -501,11 +490,23 @@ async def issue_cred(request: web.Request):
     except (StorageError, BaseModelError, StorageNotFoundError) as err:
         raise web.HTTPBadRequest(reason=err.roll_up) from err
 
+    if not supported.format:
+        raise web.HTTPBadRequest(reason="SupportedCredential missing format identifier")
+
     if supported.format != body.get("format"):
         raise web.HTTPBadRequest(reason="Requested format does not match offer.")
 
-    if not supported.format:
-        raise web.HTTPBadRequest(reason="SupportedCredential missing format identifier")
+    authorization_details = token_result.payload.get("authorization_details", None)
+    if authorization_details:
+        found = any(
+            isinstance(ad, dict)
+            and ad.get("credential_configuration_id") == supported.identifier
+            for ad in authorization_details
+        )
+        if not found:
+            raise web.HTTPBadRequest(
+                reason=f"{supported.identifier} is not authorized by the token."
+            )
 
     c_nonce = token_result.payload.get("c_nonce") or ex_record.nonce
     if c_nonce is None:
@@ -520,14 +521,15 @@ async def issue_cred(request: web.Request):
     if "proof" not in body:
         raise web.HTTPBadRequest(reason=f"proof is required for {supported.format}")
 
-    # pop = await handle_proof_of_posession(context.profile, body["proof"], c_nonce)
-    pop = PopResult(
-        holder_kid="did:example:123#key-1",
-        verified=True,
-        headers={},
-        payload={},
-        holder_jwk={},
-    )
+    pop = await handle_proof_of_posession(context.profile, body["proof"], c_nonce)
+    # TODO Temporarily skip proof of possession verification
+    # pop = PopResult(
+    #     holder_kid="did:example:123#key-1",
+    #     verified=True,
+    #     headers={},
+    #     payload={},
+    #     holder_jwk={},
+    # )
     if not pop.verified:
         raise web.HTTPBadRequest(reason="Invalid proof")
 
@@ -659,13 +661,9 @@ async def get_request(request: web.Request):
             await pres.save(session=session, reason="Retrieved presentation request")
 
             if record.pres_def_id:
-                pres_def = await OID4VPPresDef.retrieve_by_id(
-                    session, record.pres_def_id
-                )
+                pres_def = await OID4VPPresDef.retrieve_by_id(session, record.pres_def_id)
             elif record.dcql_query_id:
-                dcql_query = await DCQLQuery.retrieve_by_id(
-                    session, record.dcql_query_id
-                )
+                dcql_query = await DCQLQuery.retrieve_by_id(session, record.dcql_query_id)
             jwk = await retrieve_or_create_did_jwk(session)
 
     except StorageNotFoundError as err:
@@ -791,9 +789,7 @@ async def verify_pres_def_presentation(
 
     processors = profile.inject(CredProcessors)
     if not submission.descriptor_maps:
-        raise web.HTTPBadRequest(
-            reason="Descriptor map of submission must not be empty"
-        )
+        raise web.HTTPBadRequest(reason="Descriptor map of submission must not be empty")
 
     # TODO: Support longer descriptor map arrays
     if len(submission.descriptor_maps) != 1:
@@ -944,7 +940,7 @@ async def register(app: web.Application, multitenant: bool, context: InjectionCo
         # Spec: https://identity.foundation/.well-known/resources/did-configuration/
         web.post(f"{subpath}/token", token),
         # web.post(f"{subpath}/nonce", get_nonce),
-        web.post(f"{subpath}/notification", send_notification),
+        web.post(f"{subpath}/notification", receive_notification),
         web.post(f"{subpath}/credential", issue_cred),
         web.get(f"{subpath}/oid4vp/request/{{request_id}}", get_request),
         web.post(f"{subpath}/oid4vp/response/{{presentation_id}}", post_response),
